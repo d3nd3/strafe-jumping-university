@@ -41,29 +41,36 @@ function mountCh5AngleMystery(section) {
       <div class="panel-row">
         <div class="panel-col sticky-controls controls" style="flex:0 0 260px">
           <div class="control-row">
-            <label><span>time in the air</span><span id="am-ticks-val">0.50s</span></label>
+            <label><span>① how long this jump lasts</span><span id="am-ticks-val">0.50s</span></label>
             <input type="range" id="am-ticks" min="20" max="90" step="5" value="50" />
+            <p class="muted" style="font-size:12px;margin:2px 0 0">Real jumps last roughly this long before you land.</p>
           </div>
-          <div class="control-row">
-            <label><span>turning speed</span><span id="am-turn-val">200°/s</span></label>
+          <div class="control-row" style="margin-top:14px">
+            <label><span>② how fast you turn your view</span><span id="am-turn-val">200°/s</span></label>
             <input type="range" id="am-turn" min="0" max="1500" step="10" value="200" />
+            <p class="muted" style="font-size:12px;margin:2px 0 0">0 = never turn. 1500 = spin like a fan.</p>
           </div>
           <div class="hud" style="flex-direction:column">
-            <div class="hud-stat"><span class="k">SPEED AT LANDING</span><span class="v" id="am-final">—</span></div>
-            <div class="hud-stat warn"><span class="k">BEST POSSIBLE</span><span class="v" id="am-best">—</span></div>
+            <div class="hud-stat"><span class="k">SPEED WHEN YOU LAND</span><span class="v" id="am-final">—</span></div>
+            <div class="hud-stat warn"><span class="k">BEST POSSIBLE, THIS JUMP LENGTH</span><span class="v" id="am-best">—</span></div>
           </div>
           <div class="btn-row">
             <button class="btn primary" id="am-snap">Snap to the best turning speed</button>
           </div>
-          <p class="muted" style="font-size:12.5px;margin:10px 0 0">These controls stay put while you scroll — they drive both charts.</p>
+          <p class="muted" style="font-size:12.5px;margin:10px 0 0">These 2 sliders control everything on this page — both pictures update live as you drag them.</p>
         </div>
         <div class="panel-col" style="flex:1 1 420px">
+          <p class="muted" style="margin-top:0">This is the one jump the sliders above describe — watch it change as you drag them.</p>
           <canvas class="scene" id="am-canvas"></canvas>
-          <div class="legend"><span><span class="swatch" style="background:#7dffb0"></span>path during one jump</span></div>
+          <div class="legend"><span><span class="swatch" style="background:#7dffb0"></span>path during this one jump</span></div>
 
-          <h2 style="margin-top:28px">Every turning speed, tested</h2>
-          <p class="muted">Each point is one full simulated jump, run for real at that turning speed.</p>
-          <canvas class="scene" id="am-graph" style="height:260px"></canvas>
+          <h2 style="margin-top:28px">Same jump, every possible turning speed</h2>
+          <p class="muted">
+            The dot above only shows the turning speed you picked. This chart runs the
+            <b>same jump over again from 0°/s all the way to 1500°/s</b>, and plots the landing
+            speed each time — so you can see every option at once, not just one.
+          </p>
+          <canvas class="scene" id="am-graph" style="height:300px"></canvas>
         </div>
       </div>
     </div>
@@ -81,7 +88,7 @@ function mountCh5AngleMystery(section) {
     <div class="callout good">
       <strong>Just right</strong> keeps a little room to speed up available for the <em>whole</em>
       time you're in the air. Jump longer, and a gentler turn wins — that's why the graph's peak
-      moves when you drag the air-time slider.
+      moves when you drag slider ① (how long the jump lasts).
     </div>
 
     <a class="next-link" href="#ch6-simulator">Continue → Chapter 6: fly it yourself</a>
@@ -120,40 +127,72 @@ function mountCh5AngleMystery(section) {
     bestEl.textContent = best[1].toFixed(0);
   }
 
-  function drawGraph() {
+  function drawGraph(currentTurn, currentSpeed) {
     resizeGraph();
     const rect = graphCanvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
+    const padL = 56, padR = 20, padT = 16, padB = 34;
     gctx.fillStyle = "#0b0f0c";
     gctx.fillRect(0, 0, w, h);
 
     const maxTurn = 1500;
     const ys = curve.map((p) => p[1]);
     const minY = Math.min(300, ...ys) - 5;
-    const maxY = Math.max(...ys) + 10;
-    const xOf = (turn) => 40 + (turn / maxTurn) * (w - 60);
-    const yOf = (speed) => h - 30 - ((speed - minY) / (maxY - minY)) * (h - 50);
+    const maxY = Math.max(...ys, currentSpeed) + 10;
+    const xOf = (turn) => padL + (turn / maxTurn) * (w - padL - padR);
+    const yOf = (speed) => h - padB - ((speed - minY) / (maxY - minY)) * (h - padT - padB);
+
+    gctx.font = "11px monospace";
+    gctx.textAlign = "left";
 
     // axes
-    gctx.strokeStyle = "rgba(255,255,255,0.15)";
+    gctx.strokeStyle = "rgba(255,255,255,0.2)";
     gctx.beginPath();
-    gctx.moveTo(40, 10);
-    gctx.lineTo(40, h - 30);
-    gctx.lineTo(w - 20, h - 30);
+    gctx.moveTo(padL, padT);
+    gctx.lineTo(padL, h - padB);
+    gctx.lineTo(w - padR, h - padB);
     gctx.stroke();
 
-    // 300 reference line
-    gctx.strokeStyle = "rgba(255,107,107,0.4)";
+    // y-axis ticks (landing speed)
+    const yStep = maxY - minY > 250 ? 100 : maxY - minY > 100 ? 50 : 20;
+    gctx.fillStyle = "#8fa89a";
+    gctx.strokeStyle = "rgba(255,255,255,0.06)";
+    for (let v = Math.ceil(minY / yStep) * yStep; v <= maxY; v += yStep) {
+      const y = yOf(v);
+      gctx.beginPath();
+      gctx.moveTo(padL, y);
+      gctx.lineTo(w - padR, y);
+      gctx.stroke();
+      gctx.fillText(String(v), 6, y + 4);
+    }
+
+    // x-axis ticks (turning speed)
+    for (let t = 0; t <= maxTurn; t += 300) {
+      const x = xOf(t);
+      gctx.fillStyle = "#8fa89a";
+      gctx.fillText(t + "°/s", x - (t === 0 ? 0 : 14), h - padB + 16);
+    }
+    gctx.textAlign = "center";
+    gctx.fillText("→ turning speed", (padL + w - padR) / 2, h - 4);
+    gctx.save();
+    gctx.translate(14, (padT + h - padB) / 2);
+    gctx.rotate(-Math.PI / 2);
+    gctx.fillText("landing speed ↑", 0, 0);
+    gctx.restore();
+    gctx.textAlign = "left";
+
+    // 300 reference line (your normal running top speed)
+    gctx.strokeStyle = "rgba(255,107,107,0.5)";
     gctx.setLineDash([4, 4]);
     gctx.beginPath();
-    gctx.moveTo(40, yOf(300));
-    gctx.lineTo(w - 20, yOf(300));
+    gctx.moveTo(padL, yOf(300));
+    gctx.lineTo(w - padR, yOf(300));
     gctx.stroke();
     gctx.setLineDash([]);
-    gctx.fillStyle = "rgba(255,107,107,0.7)";
-    gctx.font = "11px monospace";
-    gctx.fillText("top speed = 300", 46, yOf(300) - 6);
+    gctx.fillStyle = "rgba(255,107,107,0.85)";
+    gctx.fillText("300 = normal running top speed", padL + 6, yOf(300) - 6);
 
+    // the curve itself, plus a visible dot at every simulated turning speed
     gctx.strokeStyle = "#7dffb0";
     gctx.lineWidth = 2;
     gctx.beginPath();
@@ -163,36 +202,48 @@ function mountCh5AngleMystery(section) {
       else gctx.lineTo(x, y);
     });
     gctx.stroke();
+    gctx.fillStyle = "#7dffb0";
+    curve.forEach((p) => {
+      gctx.beginPath();
+      gctx.arc(xOf(p[0]), yOf(p[1]), 2, 0, Math.PI * 2);
+      gctx.fill();
+    });
 
-    // current turn marker
-    const turn = +turnInput.value;
-    const cx = xOf(turn);
-    gctx.strokeStyle = "rgba(255,255,255,0.5)";
-    gctx.beginPath();
-    gctx.moveTo(cx, 10);
-    gctx.lineTo(cx, h - 30);
-    gctx.stroke();
-
-    // peak marker
-    const px = xOf(bestTurn);
-    const py = yOf(curve.reduce((m, p) => (p[1] > m ? p[1] : m), 0));
+    // peak marker: the single best turning speed for this jump length
+    const bestSpeed = curve.reduce((m, p) => (p[1] > m ? p[1] : m), 0);
+    const px = xOf(bestTurn), py = yOf(bestSpeed);
     gctx.fillStyle = "#ffd166";
     gctx.beginPath();
-    gctx.arc(px, py, 4, 0, Math.PI * 2);
+    gctx.arc(px, py, 5, 0, Math.PI * 2);
     gctx.fill();
+    gctx.fillStyle = "#ffd166";
+    gctx.fillText(`best: ${bestSpeed.toFixed(0)} at ${bestTurn.toFixed(0)}°/s`, Math.min(px + 8, w - 190), Math.max(py - 8, padT + 10));
 
-    gctx.fillStyle = "#8fa89a";
-    gctx.font = "11px monospace";
-    gctx.fillText("turning slower", 44, h - 14);
-    gctx.fillText("turning faster", w - 110, h - 14);
+    // "you are here": exactly matches the SPEED WHEN YOU LAND stat and the
+    // jump path drawn above -- same simulated run, not a separate estimate.
+    const cx = xOf(currentTurn), cy = yOf(currentSpeed);
+    gctx.strokeStyle = "rgba(255,255,255,0.35)";
+    gctx.beginPath();
+    gctx.moveTo(cx, padT);
+    gctx.lineTo(cx, h - padB);
+    gctx.stroke();
+    gctx.fillStyle = "#eafff2";
+    gctx.beginPath();
+    gctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    gctx.fill();
+    gctx.strokeStyle = "#0b0f0c";
+    gctx.lineWidth = 2;
+    gctx.stroke();
+    // drawn below its dot (peak label is above its dot) so the two labels
+    // never overlap even when your current setting is close to the best one
+    gctx.fillStyle = "#eafff2";
+    gctx.textAlign = "center";
+    gctx.fillText("you are here", Math.min(Math.max(cx, padL + 50), w - padR - 50), Math.min(cy + 24, h - padB - 4));
     gctx.textAlign = "left";
   }
 
-  function drawJump() {
-    const turn = +turnInput.value;
-    const ticks = +ticksInput.value;
+  function drawJump(turn, ticks) {
     const { finalSpeed, path } = runJump(turn, ticks);
-    finalEl.textContent = finalSpeed.toFixed(0);
 
     scene.clear();
     scene.grid();
@@ -207,13 +258,17 @@ function mountCh5AngleMystery(section) {
     scene.point([path[0][0] * 0.4, path[0][1] * 0.4], { color: "#fff", label: "start" });
     const last = path[path.length - 1];
     scene.point([last[0] * 0.4, last[1] * 0.4], { color: "#7dffb0", label: "landing" });
+    return finalSpeed;
   }
 
   function render() {
-    turnVal.textContent = turnInput.value + "°/s";
-    ticksVal.textContent = `${(+ticksInput.value / 100).toFixed(2)}s`;
-    drawGraph();
-    drawJump();
+    const turn = +turnInput.value;
+    const ticks = +ticksInput.value;
+    turnVal.textContent = turn + "°/s";
+    ticksVal.textContent = `${(ticks / 100).toFixed(2)}s`;
+    const finalSpeed = drawJump(turn, ticks);
+    finalEl.textContent = finalSpeed.toFixed(0);
+    drawGraph(turn, finalSpeed);
   }
 
   ticksInput.addEventListener("input", () => {
@@ -225,8 +280,8 @@ function mountCh5AngleMystery(section) {
     turnInput.value = bestTurn.toFixed(1);
     render();
   });
-  window.addEventListener("resize", drawGraph);
-  scene.setRedraw(drawJump);
+  window.addEventListener("resize", render);
+  scene.setRedraw(render);
 
   recomputeCurve();
   render();

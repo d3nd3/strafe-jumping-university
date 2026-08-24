@@ -245,7 +245,14 @@ function mountCh7Playground(section) {
     if (keys.has("a")) smove -= 400;
 
     const { forward, right } = AngleVectorsYaw(yaw, [0, 0, 0], [0, 0, 0]);
-    const wishvel = [forward[0] * fmove + right[0] * smove, forward[1] * fmove + right[1] * smove, 0];
+    // toThree() swaps two axes to go from physics' Z-up to three.js's Y-up --
+    // swapping exactly two axes flips handedness. Position and forward still
+    // look correct after that flip, but "right" is an orientation quantity
+    // (effectively a cross product), so it comes out mirrored on screen
+    // unless we negate it here. Confirmed by comparing against the camera's
+    // actual on-screen right vector -- physics.js and Chapter 6 are untouched
+    // and correct; this compensation is local to this chapter's 3D mapping.
+    const wishvel = [forward[0] * fmove - right[0] * smove, forward[1] * fmove - right[1] * smove, 0];
     const wishdir = [...wishvel];
     let wishspeed = VectorNormalize(wishdir);
     if (wishspeed > pm_maxspeed) wishspeed = pm_maxspeed;

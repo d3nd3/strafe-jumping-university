@@ -45,6 +45,7 @@ function mountCh7Playground(section) {
             <div class="hud-stat"><span class="k">SPEED</span><span class="v" id="pg-speed">300</span></div>
             <div class="hud-stat" id="pg-gain-stat"><span class="k">RIGHT NOW</span><span class="v" id="pg-gain">—</span></div>
             <div class="hud-stat"><span class="k">ON GROUND?</span><span class="v" id="pg-ground">yes</span></div>
+            <div class="hud-stat"><span class="k">VERTICAL SPEED</span><span class="v" id="pg-vspeed">0</span></div>
           </div>
           <div class="control-row">
             <label><span>turning speed</span><span id="pg-turnrate-val">180°/s</span></label>
@@ -60,12 +61,18 @@ function mountCh7Playground(section) {
           </label>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-top:6px">
             <input type="checkbox" id="pg-sof" checked style="accent-color:var(--accent)" />
-            SOF ground-leave tweak
+            SOF physics (uncheck for Quake 2)
           </label>
           <p class="muted" style="font-size:12px;margin:2px 0 0">
-            This file's own <code>#ifdef SOF</code>: leaves the ground above 100 u/s of upward
-            speed (checked) vs. stock Quake 2's 180 u/s (unchecked). Run up the ramp on the right
-            to feel it — lower means less of your launch speed gets eaten by ground friction.
+            Two real differences between the two games, ported from SoF's own movement code:
+            <br />1. You leave the ground once your upward speed passes 100 u/s (checked) instead
+            of Quake 2's 180 u/s (unchecked) — run up the ramp on the right to feel it; lower means
+            less of your launch speed gets eaten by ground friction before you're airborne.
+            <br />2. The instant you land, SOF resets your vertical speed to 0 (checked). Quake 2
+            leaves it exactly as it was the frame before you touched down (unchecked) — it only
+            gets zeroed on the very next frame either way, so use <b>Freeze &amp; inspect</b> right
+            as you land and watch <b>VERTICAL SPEED</b> in the HUD to see it: 0 in SOF, still your
+            fall speed in Quake 2, for that one frame.
           </p>
           <div class="btn-row" style="margin-top:10px">
             <button class="btn" id="pg-reset">⟲ Reset</button>
@@ -110,6 +117,7 @@ function mountCh7Playground(section) {
   const gainEl = section.querySelector("#pg-gain");
   const gainStat = section.querySelector("#pg-gain-stat");
   const groundEl = section.querySelector("#pg-ground");
+  const vspeedEl = section.querySelector("#pg-vspeed");
   const turnRateInput = section.querySelector("#pg-turnrate");
   const turnRateVal = section.querySelector("#pg-turnrate-val");
   const vectorsToggle = section.querySelector("#pg-vectors");
@@ -452,7 +460,14 @@ function mountCh7Playground(section) {
     const touching = position[2] <= groundH;
     if (touching) {
       position[2] = groundH;
-      if (velocity[2] < 0) velocity[2] = 0;
+      // hooks.cpp's special case: "if (_sf_sv_q2_style_jump->value ||
+      // _sf_sv_q2_mode->value) pml_velocity[2] = down_v[2];" -- Quake 2
+      // leaves your vertical speed exactly as it was the instant before you
+      // touched down, instead of snapping it to 0 like SOF does. It's a
+      // one-frame difference: the very next tick zeroes it either way via
+      // the "if (grounded) velocity[2] = 0" line below, once `grounded`
+      // catches up. Only visible by freezing the exact landing frame.
+      if (sofToggle.checked && velocity[2] < 0) velocity[2] = 0;
     }
     const leaveThreshold = sofToggle.checked ? SOF_GROUND_LEAVE_VELOCITY : Q2_GROUND_LEAVE_VELOCITY;
     grounded = touching && velocity[2] <= leaveThreshold;
@@ -527,6 +542,7 @@ function mountCh7Playground(section) {
       gainStat.classList.toggle("warn", !gaining);
       groundEl.textContent = lastFrame.grounded ? "yes" : "no";
     }
+    vspeedEl.textContent = velocity[2].toFixed(0);
 
     renderer.render(scene, camera);
   }

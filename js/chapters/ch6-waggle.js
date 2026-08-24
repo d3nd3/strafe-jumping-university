@@ -74,7 +74,7 @@ function waggleRunOffset(amplitudeDeg, periodSec) {
     pos[1] += vel[1] * CH6W_DT;
     t += CH6W_DT;
     topSpeed = Math.max(topSpeed, VectorLength(vel));
-    path.push([...pos]);
+    path.push([pos[0], pos[1], side]);
   }
   return { time: t, path, topSpeed };
 }
@@ -86,13 +86,30 @@ function mountCh6Waggle(section) {
     <div class="chapter-kicker">Chapter 6 · Aim Off-Target</div>
     <h1>Aiming straight at it is the slow way there</h1>
     <p class="lede">
-      You want to reach a flag ahead of you, fast. The obvious move: point straight at it, hold
-      forward. It feels right. It's not the fastest way — not even close.
+      Picture this: you're already in the air — mid-flight, a little speed, nobody's jumping or
+      landing here. There's a flag up ahead. You hold forward the whole time. The only question is
+      which way you point your view while you fly.
     </p>
+    <div class="callout">
+      <b>What this chapter simulates, exactly:</b> one single, continuous flight through the air
+      from a start point to a flag. Not a jump — you're already airborne for the entire thing, the
+      same "in the air, boost power is 1" situation as Chapter 4. The only thing that changes below
+      is where you point your view as you go.
+    </div>
+
+    <p class="muted" style="margin-bottom:4px">Here's exactly what the two sliders below do:</p>
+    <ol style="max-width:760px;font-size:15px;line-height:1.8;margin-top:0">
+      <li><b>① Aim offset</b> — instead of pointing your view straight at the flag, you point it a
+      little to one side of it.</li>
+      <li><b>② Switch time</b> — you don't keep pointing that same way forever. Every so often you
+      <b>swap sides</b>: your strafe key flips (A becomes D, or D becomes A) <em>and</em> your view
+      swings to point the same amount off-center, just now on the other side of the flag. Then, a
+      moment later, you swap back. This repeats, left-right-left-right, the whole flight.</li>
+    </ol>
 
     <div class="term-strip">
-      <span class="term-chip"><b>aim offset</b> <span class="varname">amplitudeDeg</span> = how far off dead-center you point</span>
-      <span class="term-chip"><b>flip time</b> <span class="varname">periodSec</span> = how often you switch which side you lean toward</span>
+      <span class="term-chip"><b>aim offset</b> <span class="varname">amplitudeDeg</span> = how far to the side of the flag you point</span>
+      <span class="term-chip"><b>switch time</b> <span class="varname">periodSec</span> = how long you point each way before swapping sides</span>
     </div>
 
     <div class="panel">
@@ -101,12 +118,12 @@ function mountCh6Waggle(section) {
           <div class="control-row">
             <label><span>① aim offset</span><span id="w-amp-val">20°</span></label>
             <input type="range" id="w-amp" min="0" max="70" step="1" value="20" />
-            <p class="muted" style="font-size:12px;margin:2px 0 0">0° = stare straight at the flag. Higher = lean further off it.</p>
+            <p class="muted" style="font-size:12px;margin:2px 0 0">0° = point straight at the flag, never turn. Higher = point further to the side.</p>
           </div>
           <div class="control-row" style="margin-top:14px">
-            <label><span>② flip time</span><span id="w-period-val">220ms</span></label>
+            <label><span>② switch time</span><span id="w-period-val">220ms</span></label>
             <input type="range" id="w-period" min="80" max="400" step="10" value="220" />
-            <p class="muted" style="font-size:12px;margin:2px 0 0">How long you lean each way before switching sides.</p>
+            <p class="muted" style="font-size:12px;margin:2px 0 0">How long before you swap: strafe key flips, view swings to the other side.</p>
           </div>
           <div class="hud" style="flex-direction:column">
             <div class="hud-stat"><span class="k">TIME TO FLAG (your aim)</span><span class="v" id="w-time">—</span></div>
@@ -122,11 +139,13 @@ function mountCh6Waggle(section) {
           <canvas class="scene" id="w-canvas"></canvas>
           <div class="legend">
             <span><span class="swatch" style="background:#888"></span>aimed straight at the flag</span>
-            <span><span class="swatch" style="background:#7dffb0"></span>your aim-off-target path</span>
+            <span><span class="swatch" style="background:#7dffb0"></span>leaning to one side</span>
+            <span><span class="swatch" style="background:#5fb4ff"></span>leaning to the other side</span>
           </div>
+          <p class="muted" style="font-size:12.5px;margin-top:6px">Each color change in your path below is one side-switch — count them and you're counting swaps.</p>
 
           <h2 style="margin-top:28px">Every aim offset, tested</h2>
-          <p class="muted">Same race, run again for every offset from 0° to 70°, flip time held at your slider ②.</p>
+          <p class="muted">Same flight, run again for every offset from 0° to 70°, switch time held at your slider ②.</p>
           <canvas class="scene" id="w-graph" style="height:280px"></canvas>
         </div>
       </div>
@@ -145,7 +164,7 @@ function mountCh6Waggle(section) {
       there.
     </div>
     <div class="callout good">
-      <strong>A modest offset, flipped regularly,</strong> keeps room to speed up available almost
+      <strong>A modest offset, switched regularly,</strong> keeps room to speed up available almost
       the entire trip (exactly Chapter 5's "just right" turning speed, now aimed at a point instead
       of spun in place) while still making steady net progress toward the flag. The community
       calls this <b>waggling</b> — it's a real, documented Quake/SoF technique for crossing gaps
@@ -285,17 +304,23 @@ function mountCh6Waggle(section) {
     gctx.textAlign = "left";
   }
 
+  // Colors the path by which side you were leaning toward at that instant --
+  // this is what "switching sides" actually looks like, not just a phrase.
+  function sideColor(side, alpha) {
+    return side >= 0 ? `rgba(125,255,176,${alpha})` : `rgba(95,180,255,${alpha})`;
+  }
+
   function drawRace(runResult) {
     scene.clear();
     scene.grid();
     // straight reference path (dashed gray)
     scene.line([0, 0], [CH6W_TARGET_DIST * 0.4, 0], { color: "rgba(255,255,255,0.35)", width: 2, dash: [6, 5] });
-    // your path
+    // your path, colored by which side you were leaning toward
     const path = runResult.path;
     for (let i = 1; i < path.length; i++) {
       const t = i / path.length;
       scene.line([path[i - 1][0] * 0.4, path[i - 1][1] * 0.4], [path[i][0] * 0.4, path[i][1] * 0.4], {
-        color: `rgba(125,255,176,${0.35 + t * 0.55})`,
+        color: sideColor(path[i][2], 0.35 + t * 0.55),
         width: 2.5,
         dash: [],
       });

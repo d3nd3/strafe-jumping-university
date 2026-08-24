@@ -2,13 +2,11 @@
 function mountCh1Hook(section) {
   section.innerHTML = `
     <div class="chapter-kicker">Chapter 1 · The Hook</div>
-    <h1>Your top speed is 300... so how is he going 480?</h1>
+    <h1>Top running speed is 300. So how is he going 480?</h1>
     <p class="lede">
-      In Quake&nbsp;2, the console variable <code>pm_maxspeed</code> caps how fast you can
-      <em>run</em> at 300 units per second. Yet every serious player, every speedrun, every
-      trick-jump video shows people flying through the air noticeably faster than that. They're
-      not cheating &mdash; they're exploiting a quirk in a few dozen lines of C code that have
-      shipped, unchanged, since 1997.
+      In Quake&nbsp;2, running on the ground never goes faster than 300 units per second. That
+      limit is real — it's checked every instant. Yet good players fly through the air noticeably
+      faster than that. Not a cheat. A trick hidden in a few lines of 1997 code.
     </p>
     <div class="panel">
       <div class="panel-row">
@@ -17,22 +15,18 @@ function mountCh1Hook(section) {
         </div>
         <div class="panel-col">
           <div class="hud">
-            <div class="hud-stat"><span class="k">CURRENT SPEED</span><span class="v" id="hook-speed">300</span></div>
-            <div class="hud-stat warn"><span class="k">RUN SPEED CAP</span><span class="v">300</span></div>
+            <div class="hud-stat"><span class="k">SPEED RIGHT NOW</span><span class="v" id="hook-speed">300</span></div>
+            <div class="hud-stat warn"><span class="k">GROUND TOP SPEED</span><span class="v">300</span></div>
           </div>
           <div class="mystery">
-            <strong>The mystery:</strong> nothing in the movement code ever raises
-            <code>pm_maxspeed</code>. The cap is real and it's checked every single tick. And yet
-            the number on the left keeps climbing past it. By the end of this journey you will
-            know <em>exactly</em> which line of code allows that, and exactly what angle you need
-            to turn at to make it happen.
+            <strong>The mystery:</strong> the 300 limit never gets raised anywhere. And yet the
+            number on the left keeps climbing past it. By the end, you'll know exactly why —
+            and exactly how to do it yourself.
           </div>
-          <p class="muted">This little animation is running the real acceleration formula you'll
-          meet in Chapter&nbsp;3 &mdash; not a fake speedometer.</p>
         </div>
       </div>
     </div>
-    <a class="next-link" href="#ch2-wishdir">Begin the journey → Chapter 2: what your keyboard actually tells the engine</a>
+    <a class="next-link" href="#ch2-wishdir">Start → Chapter 2: what your keys actually do</a>
   `;
 
   const canvas = section.querySelector("#hook-canvas");

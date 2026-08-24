@@ -1,64 +1,56 @@
-
-const CH6_FRAMETIME = 0.01; // fixed 100Hz physics tick, independent of display framerate
+const CH6_FRAMETIME = 0.01; // fixed 100 updates/sec, independent of display framerate
+const CH6_TRAIL_MAX = 220; // ~2.2s of trail — enough to see a curve, not so much it tangles
 
 function mountCh6Simulator(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 6 · The Live Simulator</div>
+    <div class="chapter-kicker">Chapter 6 · Try It Yourself</div>
     <h1>Now fly it yourself</h1>
-    <p class="lede">
-      This runs <code>pmAirMoveSteps</code> — the exact generator from every earlier chapter —
-      100 times a second, for real, driven by your keyboard. There's no gravity or ground here on
-      purpose (see the callout below): this is a pure, honest model of the horizontal air-strafe
-      math so nothing about jumping/landing/collision distracts from it.
-    </p>
+    <p class="lede">This is the exact same code from every earlier chapter, running live off your keyboard. No gravity or ground on purpose — just the pure steering trick.</p>
 
     <div class="panel">
       <div class="panel-row">
         <div class="panel-col">
           <canvas class="scene" id="sim-canvas" tabindex="0" style="height:420px;cursor:crosshair"></canvas>
           <div class="legend">
-            <span><span class="swatch" style="background:#7dffb0"></span>W/S forward-back</span>
+            <span><span class="swatch" style="background:#7dffb0"></span>W/S move / back</span>
             <span><span class="swatch" style="background:#5fb4ff"></span>A/D strafe</span>
-            <span><span class="swatch" style="background:#ffd166"></span>←/→ turn view</span>
+            <span><span class="swatch" style="background:#ffd166"></span>←/→ turn</span>
           </div>
         </div>
         <div class="panel-col" style="flex:0 0 260px">
           <div class="hud" style="flex-direction:column">
             <div class="hud-stat"><span class="k">SPEED</span><span class="v" id="sim-speed">300</span></div>
-            <div class="hud-stat" id="sim-gain-stat"><span class="k">THIS TICK</span><span class="v" id="sim-gain">—</span></div>
+            <div class="hud-stat" id="sim-gain-stat"><span class="k">RIGHT NOW</span><span class="v" id="sim-gain">—</span></div>
           </div>
           <canvas id="sim-spark" width="240" height="60" style="width:100%;height:60px;margin-top:10px;background:#0b0f0c;border:1px solid var(--border);border-radius:6px"></canvas>
           <div class="controls" style="margin-top:14px">
             <div class="control-row">
-              <label><span>turn rate</span><span id="sim-turnrate-val">180°/s</span></label>
+              <label><span>turning speed</span><span id="sim-turnrate-val">180°/s</span></label>
               <input type="range" id="sim-turnrate" min="30" max="400" step="10" value="180" />
             </div>
             <div class="btn-row">
-              <button class="btn" id="sim-reset">⟲ Reset run</button>
-              <button class="btn primary" id="sim-debug">⏸ Debug this frame</button>
+              <button class="btn" id="sim-reset">⟲ Reset</button>
+              <button class="btn primary" id="sim-debug">⏸ Freeze &amp; inspect</button>
             </div>
           </div>
-          <p class="muted" style="font-size:13px">Click the canvas first so it can see your key presses. Try holding <strong>W + D</strong> and tapping <strong>←</strong> gently — that's a real air-strafe.</p>
+          <p class="muted" style="font-size:13px">Click the box first. Hold <strong>W + D</strong>, then gently tap <strong>←</strong> — keep the ring green.</p>
         </div>
       </div>
     </div>
 
     <div class="callout">
-      <strong>Why no gravity or landing?</strong> Real strafe-jumping is bounded by how long
-      you're airborne, which depends on jump arcs, map geometry, and <code>PM_StepSlideMove</code>'s
-      collision handling — all mechanically separate from the acceleration formula this app is
-      about. Chapter 5 modeled a single realistic jump's air-time explicitly; this simulator lets
-      you fly indefinitely so you can feel the steering by hand without a clock running out.
+      No gravity or landing here on purpose — this is just the turning trick from Chapter 5, with
+      no timer running out, so you can feel it for as long as you want.
     </div>
 
     <div id="sim-debugger-wrap" style="display:none">
-      <h2>You paused mid-flight. Here's exactly what that tick's numbers are.</h2>
-      <p class="muted">This is not a replay or a fabricated example — it's the real <code>velocity</code>, <code>wishdir</code> and <code>wishspeed</code> your simulator had at the instant you clicked pause, stepped through the same debugger as Chapter 3.</p>
+      <h2>Frozen. Here's exactly what just happened.</h2>
+      <p class="muted">These are the real numbers from the instant you paused — same debugger as Chapter 3.</p>
       <div class="panel" id="sim-debugger-mount"></div>
       <button class="btn primary" id="sim-resume">▶ Resume flying</button>
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 7: recap &amp; glossary</a>
+    <a class="next-link" href="#ch7-recap">Continue → Chapter 7: recap</a>
   `;
 
   const canvas = section.querySelector("#sim-canvas");
@@ -83,7 +75,6 @@ function mountCh6Simulator(section) {
   let speedHistory = [];
   let lastFrame = null;
   let paused = false;
-  let rafId = null;
 
   canvas.addEventListener("keydown", (e) => {
     keys.add(e.key.toLowerCase());
@@ -133,34 +124,63 @@ function mountCh6Simulator(section) {
 
     pos = [pos[0] + state.velocity[0] * CH6_FRAMETIME, pos[1] + state.velocity[1] * CH6_FRAMETIME];
     trail.push([...pos]);
-    if (trail.length > 800) trail.shift();
+    if (trail.length > CH6_TRAIL_MAX) trail.shift();
     const speed = VectorLength(state.velocity);
     speedHistory.push(speed);
     if (speedHistory.length > 240) speedHistory.shift();
   }
 
+  // Camera always faces "up" the way you're looking, like a top-down racing
+  // game — instead of a fixed north-up map, which turns any tight turning
+  // into an unreadable tangle on screen.
   function drawSim() {
     scene.clear();
-    scene.grid({ step: 60 });
-    const camScale = 0.45;
-    for (let i = 1; i < trail.length; i++) {
-      const a = trail[i - 1],
-        b = trail[i];
-      scene.line(
-        [(a[0] - pos[0]) * (camScale / 0.5), (a[1] - pos[1]) * (camScale / 0.5)],
-        [(b[0] - pos[0]) * (camScale / 0.5), (b[1] - pos[1]) * (camScale / 0.5)],
-        { color: "rgba(125,255,176,0.55)", width: 2, dash: [] }
-      );
+    scene.rings([0, 0], { step: 70, count: 4 });
+
+    const theta = Math.PI / 2 - state.yaw;
+    const ct = Math.cos(theta);
+    const st = Math.sin(theta);
+    const toCam = (p) => {
+      const rx = p[0] - pos[0];
+      const ry = p[1] - pos[1];
+      return [rx * ct - ry * st, rx * st + ry * ct];
+    };
+
+    const n = trail.length;
+    for (let i = 1; i < n; i++) {
+      const alpha = (i / n) * 0.75;
+      scene.line(toCam(trail[i - 1]), toCam(trail[i]), {
+        color: `rgba(125,255,176,${alpha})`,
+        width: 2.5,
+        dash: [],
+      });
     }
-    const fwd = [Math.cos(state.yaw) * 40, Math.sin(state.yaw) * 40];
-    scene.arrow([0, 0], fwd, { color: "#ffd166", label: "view" });
-    scene.point([0, 0], { color: "#eafff2", radius: 6 });
 
     const speed = VectorLength(state.velocity);
+    const gaining = lastFrame ? lastFrame.addspeed > 0 : false;
+    const ringColor = gaining ? "#7dffb0" : "#5c6b62";
+
+    // player marker: a ring that glows green while you're gaining speed,
+    // plus a small triangle that always points "up" (your view direction).
+    scene.ctx.save();
+    const [px, py] = scene.toPixel(0, 0);
+    scene.ctx.strokeStyle = ringColor;
+    scene.ctx.lineWidth = 3;
+    scene.ctx.beginPath();
+    scene.ctx.arc(px, py, 11, 0, Math.PI * 2);
+    scene.ctx.stroke();
+    scene.ctx.fillStyle = "#eafff2";
+    scene.ctx.beginPath();
+    scene.ctx.moveTo(px, py - 9);
+    scene.ctx.lineTo(px - 6, py + 6);
+    scene.ctx.lineTo(px + 6, py + 6);
+    scene.ctx.closePath();
+    scene.ctx.fill();
+    scene.ctx.restore();
+
     speedEl.textContent = speed.toFixed(0);
     if (lastFrame) {
-      const gaining = lastFrame.addspeed > 0;
-      gainEl.textContent = gaining ? "+" + lastFrame.addspeed.toFixed(1) : lastFrame.addspeed.toFixed(1);
+      gainEl.textContent = gaining ? "gaining speed" : "not gaining";
       gainStat.classList.toggle("warn", !gaining);
     }
 
@@ -183,7 +203,7 @@ function mountCh6Simulator(section) {
       tick();
       drawSim();
     }
-    rafId = requestAnimationFrame(loop);
+    requestAnimationFrame(loop);
   }
 
   resetBtn.addEventListener("click", resetRun);
@@ -199,7 +219,7 @@ function mountCh6Simulator(section) {
 
     createDebugger({
       mount: debuggerMount,
-      title: "PM_Accelerate — real captured values from your last tick",
+      title: "The boost function — your real captured numbers",
       cSource: C_ACCELERATE,
       jsSource: JS_ACCELERATE,
       map: ACCELERATE_MAP,

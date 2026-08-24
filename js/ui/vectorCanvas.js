@@ -6,15 +6,28 @@
 function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
   const ctx = canvas.getContext("2d");
 
+  // Resizing the backing store (canvas.width/height) wipes whatever was
+  // drawn. A static diagram is only ever drawn once, right after setup --
+  // without a redraw hook, any later resize (window resize, layout shift,
+  // font swap) would silently blank it out with nothing to repaint it.
+  let redraw = null;
+  function setRedraw(fn) {
+    redraw = fn;
+  }
+
   function resize() {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.max(1, Math.round(rect.width * dpr));
     canvas.height = Math.max(1, Math.round(rect.height * dpr));
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (redraw) redraw();
   }
   resize();
   window.addEventListener("resize", resize);
+  if (window.ResizeObserver) {
+    new ResizeObserver(resize).observe(canvas);
+  }
 
   function cssSize() {
     const dpr = window.devicePixelRatio || 1;
@@ -57,13 +70,32 @@ function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
     ctx.stroke();
   }
 
-  function arrow(fromWorld, toWorld, { color = "#7dffb0", width = 2.5, label, dash = false, head = 9 } = {}) {
+  // Keeps a text draw fully inside the canvas so labels never get clipped
+  // off the edge (measures the text and nudges the anchor inward).
+  function clampLabel(x, y, str, font) {
+    const { w, h } = cssSize();
+    ctx.save();
+    ctx.font = font;
+    const tw = ctx.measureText(str).width;
+    ctx.restore();
+    const pad = 6;
+    let cx = x;
+    let cy = y;
+    if (cx + tw > w - pad) cx = w - pad - tw;
+    if (cx < pad) cx = pad;
+    if (cy < 14) cy = 14;
+    if (cy > h - pad) cy = h - pad;
+    return [cx, cy];
+  }
+
+  function arrow(fromWorld, toWorld, { color = "#7dffb0", width = 3, label, dash = false, head = 10 } = {}) {
     const [x1, y1] = toPixel(fromWorld[0], fromWorld[1]);
     const [x2, y2] = toPixel(toWorld[0], toWorld[1]);
     ctx.save();
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = width;
+    ctx.lineCap = "round";
     if (dash) ctx.setLineDash([6, 5]);
     ctx.beginPath();
     ctx.moveTo(x1, y1);
@@ -80,14 +112,19 @@ function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
     ctx.fill();
 
     if (label) {
-      ctx.font = "13px 'JetBrains Mono', monospace";
+      const font = "bold 13px 'JetBrains Mono', monospace";
+      const [lx, ly] = clampLabel(x2 + 10, y2 - 8, label, font);
+      ctx.font = font;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#0b0f0c";
+      ctx.strokeText(label, lx, ly);
       ctx.fillStyle = color;
-      ctx.fillText(label, x2 + 8, y2 - 6);
+      ctx.fillText(label, lx, ly);
     }
     ctx.restore();
   }
 
-  function point(worldXY, { color = "#fff", radius = 3.5, label } = {}) {
+  function point(worldXY, { color = "#fff", radius = 4, label } = {}) {
     const [x, y] = toPixel(worldXY[0], worldXY[1]);
     ctx.save();
     ctx.fillStyle = color;
@@ -95,8 +132,14 @@ function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
     if (label) {
-      ctx.font = "12px 'JetBrains Mono', monospace";
-      ctx.fillText(label, x + 6, y - 6);
+      const font = "bold 12px 'JetBrains Mono', monospace";
+      const [lx, ly] = clampLabel(x + 8, y - 8, label, font);
+      ctx.font = font;
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "#0b0f0c";
+      ctx.strokeText(label, lx, ly);
+      ctx.fillStyle = color;
+      ctx.fillText(label, lx, ly);
     }
     ctx.restore();
   }
@@ -145,5 +188,20 @@ function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
     ctx.restore();
   }
 
-  return { ctx, toPixel, clear, grid, arrow, point, angleArc, line, text, resize, cssSize };
+  // Concentric distance rings around a center point -- a rotation-safe
+  // "grid" for cameras that follow/rotate with a moving object.
+  function rings(centerWorld, { step = 60, count = 4, color = "rgba(120,255,170,0.12)" } = {}) {
+    const [cx, cy] = toPixel(centerWorld[0], centerWorld[1]);
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= count; i++) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, i * step * scale, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  return { ctx, toPixel, clear, grid, rings, arrow, point, angleArc, line, text, resize, cssSize, setRedraw };
 }

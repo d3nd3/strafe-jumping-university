@@ -1,0 +1,3 @@
+The tool looks impressive, but its really falling into the same pit as previous teachers, who assume every word they use is instantly understood or known. Do not use definitions that are not known to the user. Do not use same
+  variable naming terminology as the source code because often they name things badly. Give everything a simple generic definition that could be understand by 10 year old. Don't make the lessons long winded, get to the pointer quicker
+  and do so with fewer words. Make the diagrams and simulation tools more visible (some of text labels off rendered), and less buggy (the live simulation doesnt work correctly and looks like a sperm simulator)

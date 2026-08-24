@@ -2,12 +2,11 @@
 function mountCh2Wishdir(section) {
   section.innerHTML = `
     <div class="chapter-kicker">Chapter 2 · Foundations</div>
-    <h1>What your keyboard and mouse actually tell the engine</h1>
+    <h1>What your keys and mouse turn into</h1>
     <p class="lede">
-      Every tick, Quake 2 boils your input down to three numbers: <code>forwardmove</code>,
-      <code>sidemove</code>, and your view yaw. Everything from here on &mdash; every mystery in
-      this app &mdash; is built out of what the engine does with those three numbers, so it's
-      worth seeing it happen slowly, once, before the acceleration math shows up in Chapter 3.
+      Every instant, the game turns your keys and mouse into two things: a
+      <b>target direction</b> (the way you're steering) and a <b>target speed</b> (how fast
+      you're trying to go). That's it. Everything else in this app is built on those two things.
     </p>
 
     <div class="panel">
@@ -15,22 +14,22 @@ function mountCh2Wishdir(section) {
         <div class="panel-col">
           <canvas class="scene" id="wd-canvas"></canvas>
           <div class="legend">
-            <span><span class="swatch" style="background:#7dffb0"></span>forward (view direction)</span>
+            <span><span class="swatch" style="background:#7dffb0"></span>forward (where you're looking)</span>
             <span><span class="swatch" style="background:#5fb4ff"></span>right</span>
-            <span><span class="swatch" style="background:#ffd166"></span>wishvel / wishdir</span>
+            <span><span class="swatch" style="background:#ffd166"></span>target direction &amp; speed</span>
           </div>
         </div>
         <div class="panel-col controls">
           <div class="control-row">
-            <label><span>forwardmove (W/S)</span><span id="wd-fmove-val">400</span></label>
+            <label><span>forward key (W/S)</span><span id="wd-fmove-val">400</span></label>
             <input type="range" id="wd-fmove" min="-400" max="400" step="10" value="400" />
           </div>
           <div class="control-row">
-            <label><span>sidemove (A/D)</span><span id="wd-smove-val">0</span></label>
+            <label><span>strafe key (A/D)</span><span id="wd-smove-val">0</span></label>
             <input type="range" id="wd-smove" min="-400" max="400" step="10" value="0" />
           </div>
           <div class="control-row">
-            <label><span>view yaw (mouse)</span><span id="wd-yaw-val">0°</span></label>
+            <label><span>where you're looking (mouse)</span><span id="wd-yaw-val">0°</span></label>
             <input type="range" id="wd-yaw" min="-180" max="180" step="1" value="0" />
           </div>
           <div class="dbg-locals" id="wd-locals"></div>
@@ -38,27 +37,18 @@ function mountCh2Wishdir(section) {
       </div>
     </div>
 
-    <h2>Reading the code</h2>
-    <p>Here is exactly what's happening, in the real source (pmove.c:598-612):</p>
-    <pre class="code" style="max-width:640px"><div class="code-line"><span class="ln">598</span><span class="src">pml.forward[2] = 0;</span></div><div class="code-line"><span class="ln">599</span><span class="src">pml.right[2] = 0;</span></div><div class="code-line"><span class="ln">600</span><span class="src">VectorNormalize (pml.forward);</span></div><div class="code-line"><span class="ln">601</span><span class="src">VectorNormalize (pml.right);</span></div><div class="code-line"><span class="ln">605</span><span class="src">wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;</span></div><div class="code-line"><span class="ln">611</span><span class="src">VectorCopy (wishvel, wishdir);</span></div><div class="code-line"><span class="ln">612</span><span class="src">wishspeed = VectorNormalize(wishdir);</span></div></pre>
     <p class="muted">
-      <code>forward</code> and <code>right</code> are unit vectors built purely from your view
-      angle &mdash; they don't care about your velocity at all. <code>wishvel</code> is just a
-      weighted sum of those two directions using your key states as weights. Then it's split into
-      a <em>direction</em> (<code>wishdir</code>, always length 1) and a <em>speed</em>
-      (<code>wishspeed</code>, how fast you asked to go). This wishdir/wishspeed pair is the
-      entire "wish" the acceleration code has to satisfy &mdash; nothing else about your keyboard
-      matters past this point.
+      "Forward" and "right" only depend on where you're looking — not on how you're actually
+      moving. Add them together, weighted by your keys, and clamp the result to top speed (300):
+      that's your target direction and target speed. Chapter 3 shows what happens to them next.
     </p>
     <div class="callout">
-      Try setting sidemove to 400 while forwardmove stays at 400 (classic "W+D"). Notice
-      <code>wishdir</code> lands at a 45° diagonal between forward and right, and
-      <code>wishspeed</code> is <em>not</em> 400+400 &mdash; it's clamped down, because a diagonal
-      of two 400-unit sides is about 565 units long, well past <code>pm_maxspeed</code> (300).
-      That clamp, and what happens to the leftover, is exactly what Chapter 3 explains.
+      Try holding both forward and strafe keys (W+D). The target direction lands at a 45°
+      diagonal — but the target speed doesn't just add up to 800. It gets capped at 300, same as
+      running straight.
     </div>
 
-    <a class="next-link" href="#ch3-debugger">Continue → Chapter 3: step through PM_Accelerate like a debugger</a>
+    <a class="next-link" href="#ch3-debugger">Continue → Chapter 3: step through the real code</a>
   `;
 
   const canvas = section.querySelector("#wd-canvas");
@@ -112,22 +102,23 @@ function mountCh2Wishdir(section) {
     scene.arrow([0, 0], [wishvelRaw[0] * scale, wishvelRaw[1] * scale], {
       color: "rgba(255,209,102,0.55)",
       dash: true,
-      label: "raw wishvel",
+      label: "before cap",
     });
-    scene.arrow([0, 0], [wishvel[0] * scale, wishvel[1] * scale], { color: "#ffd166", label: "clamped wishvel" });
+    scene.arrow([0, 0], [wishvel[0] * scale, wishvel[1] * scale], { color: "#ffd166", label: "target" });
 
     localsEl.innerHTML = [
-      ["forward", `[${forward[0].toFixed(2)}, ${forward[1].toFixed(2)}]`],
-      ["right", `[${right[0].toFixed(2)}, ${right[1].toFixed(2)}]`],
-      ["wishvel (raw)", `[${wishvelRaw[0].toFixed(1)}, ${wishvelRaw[1].toFixed(1)}]`],
-      ["wishdir", `[${wishdir[0].toFixed(2)}, ${wishdir[1].toFixed(2)}]`],
-      ["wishspeed (raw)", wishspeedRaw.toFixed(1)],
-      ["wishspeed (clamped)", wishspeed.toFixed(1)],
+      ["forward direction", `[${forward[0].toFixed(2)}, ${forward[1].toFixed(2)}]`],
+      ["right direction", `[${right[0].toFixed(2)}, ${right[1].toFixed(2)}]`],
+      ["target motion, before cap", `[${wishvelRaw[0].toFixed(1)}, ${wishvelRaw[1].toFixed(1)}]`],
+      ["target direction", `[${wishdir[0].toFixed(2)}, ${wishdir[1].toFixed(2)}]`],
+      ["target speed, before cap", wishspeedRaw.toFixed(1)],
+      ["target speed, after cap", wishspeed.toFixed(1)],
     ]
       .map(([k, v]) => `<div class="local-row"><span class="local-key">${k}</span><span class="local-val">${v}</span></div>`)
       .join("");
   }
 
   [fmoveInput, smoveInput, yawInput].forEach((el) => el.addEventListener("input", render));
+  scene.setRedraw(render);
   render();
 }

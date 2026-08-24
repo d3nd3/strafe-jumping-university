@@ -25,6 +25,29 @@ function fmtVal(v) {
   return String(v);
 }
 
+// The code panel shows real source, so it keeps real variable names. But the
+// "watch" list next to it is plain-English on purpose -- nobody should have
+// to already know what "wishdir" means to follow along.
+const FRIENDLY_LABELS = {
+  currentspeed: "speed already aimed right",
+  addspeed: "room left to speed up",
+  accelspeed: "speed boost this step",
+  wishdir: "target direction",
+  wishspeed: "target speed",
+  wishspd: "target speed (air limit: 30)",
+  velocity: "speed + direction",
+  wishvel: "target motion",
+  forward: "forward direction",
+  right: "right direction",
+  speed: "total speed",
+  pm_airaccelerate: "air boost mode",
+  fmove: "forward key amount",
+  smove: "side key amount",
+};
+function friendlyLabel(key) {
+  return FRIENDLY_LABELS[key] || key;
+}
+
 function createDebugger({
   mount,
   title,
@@ -105,11 +128,11 @@ function createDebugger({
     const m = map[step.id] || { c: [], js: [] };
     highlightLines(cPane, m.c);
     highlightLines(jsPane, m.js);
-    descEl.innerHTML = `<strong>${escapeHtml(step.label)}</strong>` + (describe ? describe(step) : "");
+    descEl.innerHTML = describe ? describe(step) : `<strong>${escapeHtml(step.label)}</strong>`;
     const rows = Object.entries(step.locals || {})
-      .map(([k, v]) => `<div class="local-row"><span class="local-key">${k}</span><span class="local-val">${fmtVal(v)}</span></div>`)
+      .map(([k, v]) => `<div class="local-row"><span class="local-key">${friendlyLabel(k)}</span><span class="local-val">${fmtVal(v)}</span></div>`)
       .join("");
-    localsEl.innerHTML = rows || "<em>(no locals yet)</em>";
+    localsEl.innerHTML = rows || "<em>nothing yet — press Step</em>";
   }
 
   function updateButtons() {

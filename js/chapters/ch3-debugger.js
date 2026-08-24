@@ -1,54 +1,56 @@
-
 const DESCRIPTIONS = {
-  decl: "PM_Accelerate takes a wishdir (a unit vector — the direction you're asking to go), a wishspeed (how fast you're asking to go), and accel (a tuning knob: 10 on the ground, usually 1 in the air). Its whole job is to nudge <code>velocity</code> a little bit closer to that wish.",
-  currentspeed: "This is the single most important line in the whole mystery. <code>DotProduct(velocity, wishdir)</code> projects your current velocity onto the wishdir axis — it answers 'of my current speed, how much of it is already going the direction I just asked for?' Note it completely ignores any part of your velocity that's sideways to wishdir.",
-  addspeed: "addspeed is just 'how much more speed, along wishdir, would it take to reach wishspeed'. If your projected speed is already at or past wishspeed, addspeed goes zero or negative.",
-  "early-return": "Nothing to add — you're already going at least as fast as you wished for, along that direction. The function bails out here and velocity is untouched this tick.",
-  accelspeed: "accelspeed is how much speed we're actually allowed to add <em>this tick</em>: accel × frametime × wishspeed. Smaller frametime (higher framerate) means smaller steps, but also more steps per second — this is why old Quake engines were famously framerate-sensitive for movement.",
-  clamp: "Safety clamp: never overshoot. If the allowed accelspeed this tick is bigger than what's actually needed (addspeed), just add exactly addspeed instead.",
-  apply: "The payoff line. accelspeed is added along wishdir — and <strong>only</strong> along wishdir. Any part of your velocity that was sideways to wishdir is left completely alone. That's the entire trick this app is built to explain.",
+  decl: "We know 3 things: which way you're trying to go, how fast you want to go, and how strong the boost is.",
+  currentspeed: "Check how much of your current motion is already pointed the way you're trying to go.",
+  addspeed: "Work out how much speed room is left before you'd hit your target speed.",
+  "early-return": "No room left — you're already going fast enough that way. Nothing changes.",
+  accelspeed: "Work out this step's boost: boost power × tick length × target speed.",
+  clamp: "Don't overshoot. If the boost is bigger than the room left, shrink it to fit.",
+  apply: "Add the boost — but <strong>only</strong> in the direction you're trying to go. Everything sideways to that is left completely alone.",
 };
 
 function mountCh3Debugger(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 3 · The Accelerate Debugger</div>
-    <h1>Step through PM_Accelerate exactly like a debugger</h1>
-    <p class="lede">
-      This is the real function. Set up a scenario below, then hit <strong>Step</strong>
-      repeatedly (or Play) to execute it one line at a time — in both the original C and this
-      app's JS port, together, with live values.
-    </p>
+    <div class="chapter-kicker">Chapter 3 · Step Through the Real Code</div>
+    <h1>The one function that does all of this</h1>
+    <p class="lede">Press <strong>Step</strong> and watch it run, one line at a time, in the real game code and a JS copy, side by side.</p>
+
+    <div class="term-strip">
+      <span class="term-chip"><b>target direction</b> = the way you're steering</span>
+      <span class="term-chip"><b>target speed</b> = how fast you're trying to go</span>
+      <span class="term-chip"><b>boost power</b> = how strong the push is (10 on ground, 1 in air)</span>
+      <span class="term-chip"><b>tick length</b> = time since the last update</span>
+    </div>
 
     <div class="panel">
       <div class="panel-row">
         <div class="panel-col" style="flex:0 0 300px">
           <div class="controls">
             <div class="control-row">
-              <label><span>starting speed |velocity|</span><span id="d-speed-val">250</span></label>
+              <label><span>your starting speed</span><span id="d-speed-val">250</span></label>
               <input type="range" id="d-speed" min="0" max="500" step="5" value="250" />
             </div>
             <div class="control-row">
-              <label><span>angle between velocity &amp; wishdir (θ)</span><span id="d-theta-val">40°</span></label>
+              <label><span>angle to your target direction</span><span id="d-theta-val">40°</span></label>
               <input type="range" id="d-theta" min="0" max="179" step="1" value="40" />
             </div>
             <div class="control-row">
-              <label><span>wishspeed</span><span id="d-wishspeed-val">300</span></label>
+              <label><span>target speed</span><span id="d-wishspeed-val">300</span></label>
               <input type="range" id="d-wishspeed" min="0" max="400" step="5" value="300" />
             </div>
             <div class="control-row">
-              <label><span>accel</span><span id="d-accel-val">1 (air)</span></label>
+              <label><span>boost power</span><span id="d-accel-val">1 (air)</span></label>
               <input type="range" id="d-accel" min="0" max="1" step="1" value="0" />
             </div>
             <div class="control-row">
-              <label><span>frametime (ms this tick)</span><span id="d-ft-val">10</span></label>
+              <label><span>tick length (ms)</span><span id="d-ft-val">10</span></label>
               <input type="range" id="d-ft" min="1" max="100" step="1" value="10" />
             </div>
           </div>
           <canvas class="scene" id="d-canvas" style="height:280px;margin-top:14px"></canvas>
           <div class="legend">
-            <span><span class="swatch" style="background:#888"></span>velocity (before)</span>
-            <span><span class="swatch" style="background:#ffd166"></span>wishdir (× wishspeed)</span>
-            <span><span class="swatch" style="background:#7dffb0"></span>velocity (after)</span>
+            <span><span class="swatch" style="background:#888"></span>motion before</span>
+            <span><span class="swatch" style="background:#ffd166"></span>target</span>
+            <span><span class="swatch" style="background:#7dffb0"></span>motion after</span>
           </div>
         </div>
         <div class="panel-col" id="d-mount" style="flex:1 1 560px"></div>
@@ -56,14 +58,12 @@ function mountCh3Debugger(section) {
     </div>
 
     <div class="callout good">
-      Set θ around 90° with a high starting speed and step through it: <code>currentspeed</code>
-      comes out near zero, so <code>addspeed</code> stays almost the full <code>wishspeed</code>
-      even though you're already going fast. The new velocity's <em>magnitude</em> after Step
-      "apply" can end up larger than before <strong>and</strong> larger than wishspeed — because
-      the old velocity's sideways component never got touched.
+      Try angle ≈ 90° with a high starting speed. Almost none of your speed already points the
+      target way, so nearly the whole boost gets added — and your <em>total</em> speed after can
+      end up higher than your target speed. That's the whole trick.
     </div>
 
-    <a class="next-link" href="#ch4-air-vs-ground">Continue → Chapter 4: why the air is so much stingier than the ground</a>
+    <a class="next-link" href="#ch4-air-vs-ground">Continue → Chapter 4: ground vs. air</a>
   `;
 
   const canvas = section.querySelector("#d-canvas");
@@ -110,18 +110,18 @@ function mountCh3Debugger(section) {
     scene.clear();
     scene.grid();
 
-    scene.arrow([0, 0], [originalVelocity[0], originalVelocity[1]], { color: "#888", label: "velocity (before)" });
+    scene.arrow([0, 0], [originalVelocity[0], originalVelocity[1]], { color: "#888", label: "before" });
     scene.arrow([0, 0], [wishdirVec[0] * wishspeedNum, wishdirVec[1] * wishspeedNum], {
       color: "#ffd166",
       dash: true,
-      label: "wishdir × wishspeed",
+      label: "target",
     });
 
     if (step && step.locals && "currentspeed" in step.locals) {
       const cs = step.locals.currentspeed;
       const proj = [wishdirVec[0] * cs, wishdirVec[1] * cs];
       scene.line([originalVelocity[0], originalVelocity[1]], proj, { color: "rgba(255,255,255,0.35)" });
-      scene.point(proj, { color: "#fff", label: "currentspeed" });
+      scene.point(proj, { color: "#fff", label: "already matches" });
       if ("addspeed" in step.locals) {
         const target = [wishdirVec[0] * wishspeedNum, wishdirVec[1] * wishspeedNum];
         scene.line(proj, target, { color: "rgba(255,209,102,0.7)", dash: [3, 3], width: 3 });
@@ -130,7 +130,7 @@ function mountCh3Debugger(section) {
 
     if (step && step.locals && step.locals.velocity) {
       const v = step.locals.velocity;
-      scene.arrow([0, 0], [v[0], v[1]], { color: "#7dffb0", width: 3.5, label: "velocity (after)" });
+      scene.arrow([0, 0], [v[0], v[1]], { color: "#7dffb0", width: 3.5, label: "after" });
     }
   }
 
@@ -141,9 +141,10 @@ function mountCh3Debugger(section) {
     jsSource: JS_ACCELERATE,
     map: ACCELERATE_MAP,
     makeGenerator,
-    describe: (step) => `<div class="muted" style="margin-top:6px">${DESCRIPTIONS[step.id] || ""}</div>`,
+    describe: (step) => `<div>${DESCRIPTIONS[step.id] || ""}</div>`,
   });
   dbg.onChange(draw);
+  scene.setRedraw(() => draw(dbg.currentStep));
   draw(null);
 
   [speedInput, thetaInput, wishspeedInput, accelInput, ftInput].forEach((el) =>

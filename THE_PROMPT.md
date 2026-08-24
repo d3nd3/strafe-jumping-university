@@ -1,0 +1,4 @@
+So , this is going to be a javascript web visualisation project, which will fully explain every aspect of q2 strafe jumping. Attention to detail and explaining the geometric math in the most informative easy to grasp way. Make the
+  interactive tool to be fun and engage with the user in steps. Walk them through it like a journey. Common mysteries surrounding strafe jumping, like why is there a special angle direction change that maximises speed. Ensure that
+  every line of the acceleration code is shown side by side to the visualizations , let the user be able to step through the lines of code almost like a gdb debugger - but with full detailed description of what each line does. Use
+  your expertise to add even more details that contribute to the goal of giving kids the deepest insight of how this works. Crystal clear clarity is desired.

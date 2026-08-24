@@ -1,5 +1,15 @@
-const CH6_FRAMETIME = 0.01; // fixed 100 updates/sec, independent of display framerate
-const CH6_TRAIL_MAX = 220; // ~2.2s of trail — enough to see a curve, not so much it tangles
+// Real Quake-engine clients call PM_AirMove once per rendered frame, using
+// that exact frame's duration as frametime -- so your client's frame rate is
+// not cosmetic, it's a genuine input to the movement math. Competitive SoF
+// play famously locks the client to ~7ms frames (142fps): more, smaller
+// ticks per real second means your turn-vs-wishdir angle gets re-measured
+// more often while circle-strafing, which is a real, historically documented
+// advantage, not a display artifact. This starts at that same 142fps by
+// default; the dropdown below lets you compare other real client rates.
+// Independent of display framerate either way -- see the accumulator loop
+// near the bottom of this file.
+let CH6_FRAMETIME = 1 / 142;
+let CH6_TRAIL_MAX = 220; // trail length in *ticks*, so its real-time duration shifts with the fps picked above
 
 function mountCh6Simulator(section) {
   section.innerHTML = `
@@ -25,6 +35,16 @@ function mountCh6Simulator(section) {
           <canvas id="sim-spark" width="240" height="60" style="width:100%;height:60px;margin-top:10px;background:#0b0f0c;border:1px solid var(--border);border-radius:6px"></canvas>
           <div class="controls" style="margin-top:14px">
             <div class="control-row">
+              <label><span>client frame rate</span><span id="sim-fps-val">142 fps (7.0 ms)</span></label>
+              <select id="sim-fps" style="width:100%;background:#0b0f0c;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-family:inherit">
+                <option value="60">60 fps (16.7 ms)</option>
+                <option value="100">100 fps (10.0 ms)</option>
+                <option value="125">125 fps (8.0 ms)</option>
+                <option value="142" selected>142 fps (7.0 ms) — SoF's classic rate</option>
+                <option value="250">250 fps (4.0 ms)</option>
+              </select>
+            </div>
+            <div class="control-row">
               <label><span>turning speed</span><span id="sim-turnrate-val">180°/s</span></label>
               <input type="range" id="sim-turnrate" min="30" max="400" step="10" value="180" />
             </div>
@@ -41,6 +61,16 @@ function mountCh6Simulator(section) {
     <div class="callout">
       No gravity or landing here on purpose — this is just the turning trick from Chapter 5, with
       no timer running out, so you can feel it for as long as you want.
+    </div>
+
+    <div class="callout">
+      Why is <b>client frame rate</b> a movement setting at all? Because the real client calls the
+      exact function you're stepping through here once per rendered frame, using that frame's real
+      duration as <span class="varname">frametime</span>. More frames per real second means more,
+      smaller boost applications, each re-measuring your turn angle sooner — which is a real
+      advantage while circle-strafing, not a display trick. That's why competitive SoF players
+      have historically locked their client to specific rates like 142fps (≈7ms frames) instead of
+      just letting it run as fast as their monitor allows.
     </div>
 
     <div id="sim-debugger-wrap" style="display:none">
@@ -60,6 +90,8 @@ function mountCh6Simulator(section) {
   const speedEl = section.querySelector("#sim-speed");
   const gainEl = section.querySelector("#sim-gain");
   const gainStat = section.querySelector("#sim-gain-stat");
+  const fpsSelect = section.querySelector("#sim-fps");
+  const fpsVal = section.querySelector("#sim-fps-val");
   const turnRateInput = section.querySelector("#sim-turnrate");
   const turnRateVal = section.querySelector("#sim-turnrate-val");
   const resetBtn = section.querySelector("#sim-reset");
@@ -220,6 +252,14 @@ function mountCh6Simulator(section) {
     }
     requestAnimationFrame(loop);
   }
+
+  function updateFps() {
+    const fps = +fpsSelect.value;
+    CH6_FRAMETIME = 1 / fps;
+    fpsVal.textContent = `${fps} fps (${(1000 / fps).toFixed(1)} ms)`;
+  }
+  fpsSelect.addEventListener("change", updateFps);
+  updateFps();
 
   resetBtn.addEventListener("click", resetRun);
   turnRateInput.addEventListener("input", () => {

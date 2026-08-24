@@ -143,15 +143,22 @@ function mountCh3Debugger(section) {
       That's the whole trick.
     </div>
 
-    <h2>Section 3 — PM_AirAccelerate: real code, secretly unused</h2>
+    <h2>Section 3 — PM_AirAccelerate: real Quake 2 code, not SoF's own</h2>
     <p class="muted">
-      <span class="varname">pmove.c</span> actually has a <em>second</em> boost function meant for
-      the air, with a gentler 30-unit cap baked in. It's real, compiled source — but decompiling
-      the actual retail <span class="varname">SoF.exe</span> binary (Chapter 7's IDA research)
-      confirms its only caller is gated behind <span class="varname">pm_airaccelerate</span>, which
-      is hardcoded to 0 and never written anywhere else in the shipped game. So this function
-      compiles, but never actually runs when you play. Worth understanding anyway — some other
-      Quake 2 engines and mods do turn it on.
+      id's public <span class="varname">pmove.c</span> has a <em>second</em> boost function meant
+      for the air, with a gentler 30-unit cap baked in, gated behind
+      <span class="varname">pm_airaccelerate</span> as a boolean: nonzero calls the capped
+      function, zero falls back to the ordinary boost with power 1. But decompiling the actual
+      retail <span class="varname">SoF.exe</span> binary directly — cross-checked against a Linux
+      build too — shows no such branch at all. There's one boost computation in the air, and
+      <span class="varname">pm_airaccelerate</span> feeds it directly as the strength, exactly the
+      way <span class="varname">pm_accelerate</span> feeds the ground/ladder boost. It's hardcoded
+      to <b>1</b> (not 0 — always on, just weak), and the capped 30-unit formula is nowhere in the
+      compiled code: no <code>30.0</code> constant, no separate <em>addspeed</em> computed from a
+      clamped wish speed — the tell that would have to survive even if the call were merely
+      inlined. So it's not that SoF ships this function disabled; SoF's own
+      <span class="varname">PM_AirMove</span> was written without it. Worth understanding anyway —
+      it's real code, and some other Quake 2 engines and mods do wire it up.
     </p>
     <div class="panel">
       <div class="panel-row">

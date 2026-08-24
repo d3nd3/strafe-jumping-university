@@ -4,7 +4,14 @@
 // with a ground, gravity, and a jump button bolted on around it, and a
 // third-person camera instead of a top-down one.
 
-const CH7_FRAMETIME = 0.01; // fixed 100 updates/sec, same as Chapter 6
+// Real Quake-engine clients call PM_AirMove once per rendered frame, using
+// that frame's real duration as frametime -- client frame rate is a genuine
+// movement input, not cosmetic (see Chapter 7's matching callout). This
+// starts at 142fps (~7ms), the rate competitive SoF play has historically
+// locked to; the dropdown below lets you compare other real client rates.
+// Independent of display refresh rate either way -- see the accumulator
+// loop near the bottom of this file.
+let CH7_FRAMETIME = 1 / 142;
 const CH7_GRAVITY = 800; // typical Quake 2 sv_gravity default
 const CH7_JUMP_VELOCITY = 270; // real SoF.exe PM_CheckJump: pml.velocity[2] = 270.0 (a flat
 // assignment, not the leaked pmove.c source's "+= 270, clamp to min 270" -- confirmed by
@@ -63,6 +70,16 @@ function mountCh7Playground(section) {
             <div class="hud-stat"><span class="k">MAX SPEED</span><span class="v" id="pg-maxspeed">300</span></div>
           </div>
           <div class="control-row">
+            <label><span>client frame rate</span><span id="pg-fps-val">142 fps (7.0 ms)</span></label>
+            <select id="pg-fps" style="width:100%;background:#0b0f0c;color:var(--text);border:1px solid var(--border);border-radius:6px;padding:6px;font-family:inherit;margin-bottom:10px">
+              <option value="60">60 fps (16.7 ms)</option>
+              <option value="100">100 fps (10.0 ms)</option>
+              <option value="125">125 fps (8.0 ms)</option>
+              <option value="142" selected>142 fps (7.0 ms) — SoF's classic rate</option>
+              <option value="250">250 fps (4.0 ms)</option>
+            </select>
+          </div>
+          <div class="control-row">
             <label><span>turning speed</span><span id="pg-turnrate-val">180°/s</span></label>
             <input type="range" id="pg-turnrate" min="30" max="400" step="10" value="180" />
           </div>
@@ -92,6 +109,14 @@ function mountCh7Playground(section) {
             you on impact — hit it dead-on and lose about half your speed, graze it at an angle and
             barely lose any. Quake 2 (unchecked) skips that scrub and keeps 100% of whatever speed
             survives the slide, so wall-sliding is faster there.
+            <br />4. <b>Not</b> a difference, despite looking like one at first: air acceleration.
+            id's public Quake 2 source gates a special 30-unit-capped boost formula behind
+            <span class="varname">pm_airaccelerate</span> (off by default, so stock Q2 falls back
+            to boost power 1 in the air). Decompiling retail SoF.exe directly shows it never had
+            that gate or the capped formula at all — SoF's air boost is always just power 1,
+            unconditionally. Same number both games, arrived at two structurally different ways —
+            this toggle doesn't change your air control because there's nothing here for it to
+            toggle.
           </p>
           <div class="btn-row" style="margin-top:10px">
             <button class="btn" id="pg-reset">⟲ Reset</button>
@@ -125,6 +150,15 @@ function mountCh7Playground(section) {
       ground and it drops to 1, plus gravity — the Chapter 4 split, now under your feet.
     </div>
 
+    <div class="callout">
+      <b>Client frame rate</b> is a real movement setting, not cosmetic: the actual game calls this
+      exact function once per rendered frame, using that frame's real duration as
+      <span class="varname">frametime</span>. More frames per real second means more, smaller boost
+      applications, each re-measuring your turn angle against your target direction sooner — a
+      genuine advantage while air-strafing. That's why competitive SoF play has historically locked
+      the client to specific rates like 142fps (≈7ms frames) rather than an uncapped one.
+    </div>
+
     <div id="pg-debugger-wrap" style="display:none">
       <h2>Frozen. Here's exactly what just happened.</h2>
       <p class="muted">Real numbers from the instant you paused, including whether you were on the ground or airborne.</p>
@@ -142,6 +176,8 @@ function mountCh7Playground(section) {
   const groundEl = section.querySelector("#pg-ground");
   const vspeedEl = section.querySelector("#pg-vspeed");
   const maxspeedEl = section.querySelector("#pg-maxspeed");
+  const fpsSelect = section.querySelector("#pg-fps");
+  const fpsVal = section.querySelector("#pg-fps-val");
   const turnRateInput = section.querySelector("#pg-turnrate");
   const turnRateVal = section.querySelector("#pg-turnrate-val");
   const vectorsToggle = section.querySelector("#pg-vectors");
@@ -466,7 +502,7 @@ function mountCh7Playground(section) {
     if (wishspeed > maxspeed) wishspeed = maxspeed;
 
     const before = [...velocity];
-    const accelUsed = grounded ? pm_accelerate : 1;
+    const accelUsed = grounded ? pm_accelerate : pm_airaccelerate;
 
     if (grounded) velocity[2] = 0;
     const gen = pmAccelerateSteps(velocity, wishdir, wishspeed, accelUsed, CH7_FRAMETIME);
@@ -661,6 +697,14 @@ function mountCh7Playground(section) {
     }
     requestAnimationFrame(loop);
   }
+
+  function updateFps() {
+    const fps = +fpsSelect.value;
+    CH7_FRAMETIME = 1 / fps;
+    fpsVal.textContent = `${fps} fps (${(1000 / fps).toFixed(1)} ms)`;
+  }
+  fpsSelect.addEventListener("change", updateFps);
+  updateFps();
 
   resetBtn.addEventListener("click", resetRun);
   turnRateInput.addEventListener("input", () => {

@@ -228,10 +228,9 @@ void PM_AirMove (void)
 	}
 	else
 	{	// not on ground, so little effect on velocity
-		if (pm_airaccelerate)
-			PM_AirAccelerate (wishdir, wishspeed, pm_accelerate);
-		else
-			PM_Accelerate (wishdir, wishspeed, 1);
+		// reconstructed from the disassembly (id's public source branches on
+		// pm_airaccelerate here; SoF's compiled PM_AirMove doesn't):
+		PM_Accelerate (wishdir, wishspeed, pm_airaccelerate);
 		// add gravity
 		pml.velocity[2] -= pm->s.gravity * pml.frametime;
 		PM_StepSlideMove (); //sof1 slidefix here. velocity clamped to a mininum.
@@ -263,11 +262,10 @@ function* pmAirMoveSteps(state, cmd, frametime) {
   }
 
   // -- this app only ever simulates the airborne branch --
-  if (pm_airaccelerate) {
-    yield* pmAirAccelerateSteps(state.velocity, wishdir, wishspeed, pm_accelerate, frametime);
-  } else {
-    yield* pmAccelerateSteps(state.velocity, wishdir, wishspeed, 1, frametime);
-  }
+  // No if/else here -- confirmed via disassembly that retail SoF just
+  // always calls the plain accelerate formula, parameterized by
+  // pm_airaccelerate (see physics.js for the full IDA evidence).
+  yield* pmAccelerateSteps(state.velocity, wishdir, wishspeed, pm_airaccelerate, frametime);
   // gravity + PM_StepSlideMove intentionally omitted: this app is a pure
   // horizontal air-strafe model, see Chapter 6 for why.
 }
@@ -278,8 +276,8 @@ const AIR_MOVE_MAP = {
   wishvel: { c: [605, 607], js: [4, 5, 6, 7, 8, 9] },
   wishdir: { c: [611, 612], js: [11, 12] },
   "clamp-maxspeed": { c: [619, 623], js: [14, 15, 16, 17] },
-  branch: { c: [666, 669], js: [20] },
-  done: { c: [671, 673], js: [25] },
+  branch: { c: [666, 669], js: [22, 23, 24, 25, 26] },
+  done: { c: [671, 673], js: [29] },
 };
 
 // Plain-English descriptions for PM_AirMove's own steps -- the code that
@@ -291,8 +289,8 @@ const AIR_MOVE_DESCRIPTIONS = {
   basis: `Your view's yaw (left/right look, not up/down) turns into two <b>unit vectors</b> (each exactly length 1): ${VARNAME("forward")} (the way you're looking) and ${VARNAME("right")} (90° clockwise from that). These come purely from your mouse/view angle -- your keys haven't entered the picture yet.`,
   wishvel: `Now your keys enter the picture. ${VARNAME("fmove")} is your W/S input (-400..400) and ${VARNAME("smove")} is A/D (-400..400). ${VARNAME("wishvel")} = ${VARNAME("forward")}×${VARNAME("fmove")} + ${VARNAME("right")}×${VARNAME("smove")} — the velocity you're <em>asking for</em> this instant. This is a completely separate vector from ${VARNAME("velocity")} (your real, accumulated motion) — ${VARNAME("wishvel")} is rebuilt from scratch every single tick and forgotten immediately after.`,
   wishdir: `<b>${VARNAME("wishdir")} = ${VARNAME("wishvel")}, but forced to length 1.</b> ${VARNAME("wishspeed")} is set to whatever length ${VARNAME("wishvel")} had <em>before</em> that — <code>VectorNormalize()</code> both shrinks the vector to unit length AND hands back the original length as its return value, in one call. So ${VARNAME("wishspeed")} is the magnitude of ${VARNAME("wishvel")} (your <em>intended</em> speed, straight from your key presses) — it is <strong>not</strong> the magnitude of ${VARNAME("velocity")} (your <em>actual</em> current speed). Those are two unrelated numbers that just happen to share a similar name; they can differ by hundreds of units/sec, and that gap is exactly what circle-strafing exploits.`,
-  "clamp-maxspeed": `If ${VARNAME("wishspeed")} is asking for more than the game allows as input (${VARNAME("pm_maxspeed")} = 300, or ${VARNAME("pm_duckspeed")} = 100 while crouched), it gets capped right here. This only limits what you can <em>ask</em> for each tick — it says nothing about how fast you can actually <em>be</em> moving. Your real velocity's magnitude is never capped by this line; that's how circle-strafing climbs past 300 at all.`,
-  branch: `Airborne, so the boost power depends on ${VARNAME("pm_airaccelerate")}. In this file it's 0 (confirmed hardcoded in the retail SoF.exe, not a live toggle), so this always calls the ordinary boost function you already know from Chapter 3, with boost power 1.`,
+  "clamp-maxspeed": `If ${VARNAME("wishspeed")} is asking for more than the game allows as input (${VARNAME("pm_maxspeed")} = 300, or ${VARNAME("pm_duckspeed")} = 100 while crouched), it gets capped right here. This only limits what you can <em>ask</em> for each tick — it says nothing about how fast you can actually <em>be</em> moving. Your real velocity's magnitude is never capped by this line; that's how circle-strafing climbs past 300 at all. <br/><br/><b>A real dead-code detail:</b> this line also rescales ${VARNAME("wishvel")} itself (<code>VectorScale(wishvel, maxspeed/wishspeed, wishvel)</code>), but nothing in this function ever reads ${VARNAME("wishvel")} again afterward except one ladder-only check on ${VARNAME("wishvel")}[2] — and that component was already forced to exactly 0 two lines earlier, so scaling it changes nothing (0 × anything is still 0). Only ${VARNAME("wishdir")}/${VARNAME("wishspeed")} — both already computed *before* this line — actually reach ${VARNAME("PM_Accelerate")}. The same inert line appears in <span class="varname">PM_WaterMove</span> and <span class="varname">PM_FlyMove</span> too, so it looks like a copy-pasted idiom, not a bug specific to this function. Confirmed against id Software's own published source on GitHub (id-Software/Quake-2, <span class="varname">qcommon/pmove.c</span>) — it's dead code in the original game itself, not something a mod introduced.`,
+  branch: `Airborne, so the boost power is ${VARNAME("pm_airaccelerate")} — confirmed hardcoded to <b>1</b> in the retail binary (not a togglable cvar). id's own public Quake 2 source branches here between two different formulas depending on whether that value is truthy; SoF's compiled ${VARNAME("PM_AirMove")} contains no such branch at all, just this one call to the ordinary boost function you already know from Chapter 3, using ${VARNAME("pm_airaccelerate")} as its strength.`,
   done: `${VARNAME("velocity")} has now been updated by the boost function below, using the ${VARNAME("wishdir")}/${VARNAME("wishspeed")} built just above. This is the entire path from a key press to a velocity change, one full tick, start to finish.`,
 };
 
@@ -325,11 +323,11 @@ const AIRMOVE_TO_ACCELERATE_MAP = {
 // Plain-English descriptions for PM_AirAccelerate's own steps (the 30-cap
 // variant). Shares nothing with ACCELERATE_DESCRIPTIONS -- despite looking
 // almost identical, the two functions differ in a way worth spelling out
-// (see "accelspeed" below), and this function is confirmed unreachable in
-// retail SoF (see the callout in Chapter 3), so its description leans on
-// that context throughout.
+// (see "accelspeed" below). This is real, compiled-elsewhere Quake 2 code,
+// but not confirmed present in SoF's own source at all -- see the callout
+// in Chapter 3 -- so its description doesn't assume a SoF caller exists.
 const AIR_ACCELERATE_DESCRIPTIONS = {
-  decl: `Same 3 things as PM_Accelerate: which way (${VARNAME("wishdir")}, always a unit vector), how fast you're asking to go (${VARNAME("wishspeed")}), how strong the boost is (${VARNAME("accel")}). This function's only caller passes ${VARNAME("accel")} = <code>pm_accelerate</code> = <b>10</b> — the same strength used on the ground, not the weaker 1 that plain PM_Accelerate gets in the air.`,
+  decl: `Same 3 things as PM_Accelerate: which way (${VARNAME("wishdir")}, always a unit vector), how fast you're asking to go (${VARNAME("wishspeed")}), how strong the boost is (${VARNAME("accel")}). In id's own public source, this function's caller passes ${VARNAME("accel")} = <code>pm_airaccelerate</code> — a cvar, off by default. SoF's compiled binary never calls this function at all; see Chapter 3 for how we know.`,
   "wishspd-init": `A local copy, ${VARNAME("wishspd")}, starts out equal to ${VARNAME("wishspeed")} — the real ${VARNAME("wishspeed")} is left untouched from here on.`,
   "wishspd-clamp": `If ${VARNAME("wishspd")} is over 30, clamp it to 30. This is the whole point of the function: no matter how fast you're asking to go, the speed used to measure "room left" below is capped at a gentle 30 units/sec — with a boost as strong as the ground's (10), this cap is what keeps air control from being absurdly twitchy.`,
   currentspeed: `Same as PM_Accelerate: measure how much of your current motion (${VARNAME("velocity")}) already points toward ${VARNAME("wishdir")}.`,

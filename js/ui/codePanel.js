@@ -40,7 +40,7 @@ const FRIENDLY_LABELS = {
   forward: "forward direction",
   right: "right direction",
   speed: "total speed",
-  pm_airaccelerate: "air boost mode",
+  pm_airaccelerate: "air boost strength",
   fmove: "forward key amount",
   smove: "side key amount",
 };

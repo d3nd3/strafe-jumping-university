@@ -17,15 +17,30 @@
 const pm_stopspeed = 100;
 const pm_maxspeed = 300;
 const pm_accelerate = 10;
-// Confirmed by decompiling the retail SoF.exe binary: pm_airaccelerate is
-// statically initialized to 1.0 and never written anywhere else in the
-// executable -- it's a permanent constant, not a togglable cvar in the
-// shipped game. Kept as 0 here only as a flag for which formula this file's
-// pmAirMoveSteps takes (see below); the real game reaches the exact same
-// numeric result (accel = 1 in air) by always using this hardcoded 1.0
-// directly, with no if/else at all -- the special 30-unit-cap
-// PM_AirAccelerate formula below is never actually reachable in retail SoF.
-const pm_airaccelerate = 0;
+// Confirmed by decompiling PM_AirMove directly out of the retail binary --
+// both the Windows SoF.exe and the Linux sof.sof2000i386 build agree --
+// pm_airaccelerate is statically initialized to 1.0 and never written
+// anywhere else: a permanent constant, not a togglable cvar, in the shipped
+// game. More importantly, it's not a boolean gate at all. id's public
+// Quake 2 pmove.c (and the id-Software/Quake-2 GitHub release) has
+// PM_AirMove's airborne branch read `if (pm_airaccelerate) PM_AirAccelerate
+// (...) else PM_Accelerate(wishdir, wishspeed, 1)` -- a runtime test picking
+// between two different formulas. That test does not exist in SoF's
+// compiled airborne branch: there's a single accelerate computation, and
+// pm_airaccelerate is read once as a plain multiplicand feeding it, exactly
+// parallel to how pm_accelerate parameterizes the ground/ladder branches.
+// The tell: PM_AirAccelerate's defining trait is capping wishspeed to 30
+// before computing addspeed, while still using the full wishspeed to size
+// accelspeed -- two different derived values in the same call. SoF's
+// compiled addspeed is computed exactly once, from the uncapped wishspeed,
+// *before* the ladder/ground/air branch even starts, then reused unchanged
+// inside the air branch. No 30.0 constant appears anywhere in the function.
+// A faithful inline of PM_AirAccelerate could not lose that cap without
+// changing behavior, so its absence isn't a compiler optimization -- SoF's
+// own PM_AirMove was written without that separate formula. Net effect:
+// pm_airaccelerate is just SoF's (always-on) air accel scalar, structurally
+// identical in shape to pm_accelerate but ten times weaker.
+const pm_airaccelerate = 1;
 const pm_duckspeed = 100;
 const pm_friction = 6;
 
@@ -169,10 +184,11 @@ function* pmAccelerateSteps(velocity, wishdir, wishspeed, accel, frametime) {
 // ---------------------------------------------------------------------------
 // PM_AirAccelerate (pmove.c:424-441)
 //
-// Present in the source, but confirmed unreachable in the retail SoF.exe
-// binary -- its only caller there always takes the plain PM_Accelerate path
-// instead (see pm_airaccelerate above). Kept here as a faithful 1:1 port of
-// real source code that some other Quake 2 engines/mods do actually use.
+// Real Quake 2 code -- id's own public pmove.c has this exact function --
+// but not confirmed present in SoF's own source at all: the retail binary's
+// PM_AirMove doesn't call anything shaped like this (see pm_airaccelerate
+// above for how we know). Kept here as a faithful 1:1 port of the id source,
+// useful context since some other Quake 2 engines/mods do wire this up.
 // Identical to PM_Accelerate except the *wished* speed used for the addspeed
 // comparison is capped to 30 units/sec, even though the full wishspeed is
 // still used to size accelspeed -- gentler, more skill-based air control.
@@ -297,18 +313,11 @@ function* pmAirMoveSteps(state, cmd, frametime) {
 
   yield {
     id: "branch",
-    label: `pm_airaccelerate is ${pm_airaccelerate} -> ${
-      pm_airaccelerate ? "PM_AirAccelerate" : "PM_Accelerate(wishdir, wishspeed, 1)"
-    }`,
+    label: `PM_Accelerate(wishdir, wishspeed, pm_airaccelerate)  -- pm_airaccelerate = ${pm_airaccelerate}, no separate air formula in retail SoF`,
     locals: { pm_airaccelerate },
   };
 
-  let accelResult;
-  if (pm_airaccelerate) {
-    accelResult = yield* pmAirAccelerateSteps(state.velocity, wishdir, wishspeed, pm_accelerate, frametime);
-  } else {
-    accelResult = yield* pmAccelerateSteps(state.velocity, wishdir, wishspeed, 1, frametime);
-  }
+  const accelResult = yield* pmAccelerateSteps(state.velocity, wishdir, wishspeed, pm_airaccelerate, frametime);
 
   yield {
     id: "done",

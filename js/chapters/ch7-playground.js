@@ -1,4 +1,4 @@
-// Chapter 7: everything the course taught, in one 3D playground. Reuses the
+// Chapter 8: everything the course taught, in one 3D playground. Reuses the
 // exact same physics.js functions as every earlier chapter -- this is not a
 // separate "game build", it's the same pmAirMoveSteps/pmAccelerateSteps code
 // with a ground, gravity, and a jump button bolted on around it, and a
@@ -33,7 +33,7 @@ function toThree(v, out) {
 
 function mountCh7Playground(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 7 · The Full Picture</div>
+    <div class="chapter-kicker">Chapter 8 · The Full Picture</div>
     <h1>Try it all, in 3D</h1>
     <p class="lede">Same target direction, same boost function, same turning trick — now with a
     ground, gravity, and a jump, watched from behind in 3D.</p>
@@ -102,7 +102,7 @@ function mountCh7Playground(section) {
       <button class="btn primary" id="pg-resume">▶ Resume</button>
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 8: recap</a>
+    <a class="next-link" href="#ch7-recap">Continue → Chapter 9: recap</a>
   `;
 
   const wrap = section.querySelector("#pg-wrap");
@@ -531,9 +531,28 @@ function mountCh7Playground(section) {
     renderer.render(scene, camera);
   }
 
-  function loop() {
+  // Fixed-timestep accumulator: tick() must advance exactly CH7_FRAMETIME of
+  // simulated time per call for gravity/jump height to be correct, but
+  // requestAnimationFrame fires once per *display refresh*, not at a fixed
+  // rate -- calling tick() once per rAF callback (as this used to) made the
+  // simulation run at refreshRate * CH7_FRAMETIME real-time speed: slow
+  // motion on a 60Hz screen, ~44% too fast on 144Hz (gravity feels stronger,
+  // jumps look shorter -- exactly the reported symptom). This runs tick()
+  // however many times are actually needed to catch up to real elapsed time,
+  // so a jump reaches the same real-world height in the same real-world
+  // milliseconds on every monitor.
+  let lastTime = null;
+  let accumulator = 0;
+  function loop(now) {
+    if (lastTime === null) lastTime = now;
+    const realDt = Math.min(0.25, (now - lastTime) / 1000); // clamp: avoid a huge catch-up burst after a tab switch
+    lastTime = now;
     if (!paused) {
-      tick();
+      accumulator += realDt;
+      while (accumulator >= CH7_FRAMETIME) {
+        tick();
+        accumulator -= CH7_FRAMETIME;
+      }
       updateVisuals();
     }
     requestAnimationFrame(loop);
@@ -568,5 +587,5 @@ function mountCh7Playground(section) {
   });
 
   resetRun();
-  loop();
+  requestAnimationFrame(loop);
 }

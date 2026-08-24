@@ -1,6 +1,6 @@
 function mountCh7Recap(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 8 · Recap</div>
+    <div class="chapter-kicker">Chapter 9 · Recap</div>
     <h1>What you just learned</h1>
 
     <p class="lede">Strafe-jumping isn't a bug or "just skill." It's a direct result of a few
@@ -12,8 +12,9 @@ function mountCh7Recap(section) {
         <li>The boost function only adds speed <b>toward the target</b>, and never touches speed that's sideways to it — Ch. 3.</li>
         <li>In the air, the boost is 10× weaker than on the ground — Ch. 4.</li>
         <li>Because sideways speed is never removed, turning at the right speed lets a little get added every instant, all flight long — Ch. 5.</li>
-        <li>You flew it yourself, and froze a real instant to see the exact numbers behind it — Ch. 6.</li>
-        <li>You watched it all happen in full 3D, from behind your own character — Ch. 7.</li>
+        <li>Aiming a little off from your actual destination — not straight at it — gets you there faster, not slower — Ch. 6.</li>
+        <li>You flew it yourself, and froze a real instant to see the exact numbers behind it — Ch. 7.</li>
+        <li>You watched it all happen in full 3D, from behind your own character — Ch. 8.</li>
       </ol>
     </div>
 
@@ -30,7 +31,7 @@ function mountCh7Recap(section) {
     </dl>
 
     <div class="callout good" style="margin-top:30px">
-      Go back to Chapter 7 and try to beat your own top speed in 3D.
+      Go back to Chapter 8 and try to beat your own top speed in 3D.
     </div>
 
     <a class="next-link" href="#ch1-hook">↺ Back to the start</a>

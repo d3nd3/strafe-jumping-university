@@ -3,7 +3,7 @@ const CH6_TRAIL_MAX = 220; // ~2.2s of trail — enough to see a curve, not so m
 
 function mountCh6Simulator(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 6 · Try It Yourself</div>
+    <div class="chapter-kicker">Chapter 7 · Try It Yourself</div>
     <h1>Now fly it yourself</h1>
     <p class="lede">This is the exact same code from every earlier chapter, running live off your keyboard. No gravity or ground on purpose — just the pure steering trick.</p>
 
@@ -50,7 +50,7 @@ function mountCh6Simulator(section) {
       <button class="btn primary" id="sim-resume">▶ Resume flying</button>
     </div>
 
-    <a class="next-link" href="#ch7-playground">Continue → Chapter 7: the full picture in 3D</a>
+    <a class="next-link" href="#ch7-playground">Continue → Chapter 8: the full picture in 3D</a>
   `;
 
   const canvas = section.querySelector("#sim-canvas");
@@ -198,9 +198,24 @@ function mountCh6Simulator(section) {
     sctx.stroke();
   }
 
-  function loop() {
+  // Fixed-timestep accumulator -- see Chapter 8's identical comment. Calling
+  // tick() once per requestAnimationFrame callback made simulated speed
+  // depend on the viewer's monitor refresh rate (slow motion at 60Hz, ~44%
+  // too fast at 144Hz); this runs tick() as many times as needed to catch up
+  // to real elapsed time instead, so speed gain is the same real-world speed
+  // on every monitor.
+  let lastTime = null;
+  let accumulator = 0;
+  function loop(now) {
+    if (lastTime === null) lastTime = now;
+    const realDt = Math.min(0.25, (now - lastTime) / 1000);
+    lastTime = now;
     if (!paused) {
-      tick();
+      accumulator += realDt;
+      while (accumulator >= CH6_FRAMETIME) {
+        tick();
+        accumulator -= CH6_FRAMETIME;
+      }
       drawSim();
     }
     requestAnimationFrame(loop);
@@ -241,5 +256,5 @@ function mountCh6Simulator(section) {
   });
 
   resetRun();
-  loop();
+  requestAnimationFrame(loop);
 }

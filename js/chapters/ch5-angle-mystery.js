@@ -91,7 +91,7 @@ function mountCh5AngleMystery(section) {
       moves when you drag slider ① (how long the jump lasts).
     </div>
 
-    <a class="next-link" href="#ch6-simulator">Continue → Chapter 6: fly it yourself</a>
+    <a class="next-link" href="#ch6-waggle">Continue → Chapter 6: why aiming off-target is faster</a>
   `;
 
   const canvas = section.querySelector("#am-canvas");

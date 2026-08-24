@@ -50,7 +50,7 @@ function mountCh6Simulator(section) {
       <button class="btn primary" id="sim-resume">▶ Resume flying</button>
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 7: recap</a>
+    <a class="next-link" href="#ch7-playground">Continue → Chapter 7: the full picture in 3D</a>
   `;
 
   const canvas = section.querySelector("#sim-canvas");

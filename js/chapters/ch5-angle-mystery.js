@@ -39,11 +39,7 @@ function mountCh5AngleMystery(section) {
 
     <div class="panel">
       <div class="panel-row">
-        <div class="panel-col">
-          <canvas class="scene" id="am-canvas"></canvas>
-          <div class="legend"><span><span class="swatch" style="background:#7dffb0"></span>path during one jump</span></div>
-        </div>
-        <div class="panel-col controls">
+        <div class="panel-col sticky-controls controls" style="flex:0 0 260px">
           <div class="control-row">
             <label><span>time in the air</span><span id="am-ticks-val">0.50s</span></label>
             <input type="range" id="am-ticks" min="20" max="90" step="5" value="50" />
@@ -52,20 +48,25 @@ function mountCh5AngleMystery(section) {
             <label><span>turning speed</span><span id="am-turn-val">200°/s</span></label>
             <input type="range" id="am-turn" min="0" max="1500" step="10" value="200" />
           </div>
-          <div class="hud">
+          <div class="hud" style="flex-direction:column">
             <div class="hud-stat"><span class="k">SPEED AT LANDING</span><span class="v" id="am-final">—</span></div>
             <div class="hud-stat warn"><span class="k">BEST POSSIBLE</span><span class="v" id="am-best">—</span></div>
           </div>
           <div class="btn-row">
             <button class="btn primary" id="am-snap">Snap to the best turning speed</button>
           </div>
+          <p class="muted" style="font-size:12.5px;margin:10px 0 0">These controls stay put while you scroll — they drive both charts.</p>
+        </div>
+        <div class="panel-col" style="flex:1 1 420px">
+          <canvas class="scene" id="am-canvas"></canvas>
+          <div class="legend"><span><span class="swatch" style="background:#7dffb0"></span>path during one jump</span></div>
+
+          <h2 style="margin-top:28px">Every turning speed, tested</h2>
+          <p class="muted">Each point is one full simulated jump, run for real at that turning speed.</p>
+          <canvas class="scene" id="am-graph" style="height:260px"></canvas>
         </div>
       </div>
     </div>
-
-    <h2>Every turning speed, tested</h2>
-    <p class="muted">Each point is one full simulated jump, run for real at that turning speed.</p>
-    <canvas class="scene" id="am-graph" style="height:260px"></canvas>
 
     <h2>Why "just right" beats both extremes</h2>
     <div class="callout">

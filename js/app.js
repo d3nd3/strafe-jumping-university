@@ -5,6 +5,7 @@ const chapters = [
   { id: "ch4-air-vs-ground", title: "Why Air Is Different", mount: mountCh4AirVsGround },
   { id: "ch5-angle-mystery", title: "The Angle Mystery", mount: mountCh5AngleMystery },
   { id: "ch6-simulator", title: "Live Simulator", mount: mountCh6Simulator },
+  { id: "ch7-playground", title: "The Full Picture (3D)", mount: mountCh7Playground },
   { id: "ch7-recap", title: "Recap & Glossary", mount: mountCh7Recap },
 ];
 

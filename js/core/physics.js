@@ -19,6 +19,30 @@ const pm_maxspeed = 300;
 const pm_accelerate = 10;
 const pm_airaccelerate = 0; // vanilla Q2/SoF default -- this is the crux of Chapter 4
 const pm_duckspeed = 100;
+const pm_friction = 6;
+
+// ---------------------------------------------------------------------------
+// PM_Friction, ground-only (pmove.c:355-397, water branch omitted -- this
+// app never simulates water). Not one of the course's stepped lessons; it's
+// here purely so Chapter 7's 3D playground can stop rolling forever once you
+// let go of the keys on the ground, the same way the real game does.
+// ---------------------------------------------------------------------------
+function pmGroundFriction(velocity, frametime) {
+  const speed = VectorLength(velocity);
+  if (speed < 1) {
+    velocity[0] = 0;
+    velocity[1] = 0;
+    return;
+  }
+  const control = speed < pm_stopspeed ? pm_stopspeed : speed;
+  const drop = control * pm_friction * frametime;
+  let newspeed = speed - drop;
+  if (newspeed < 0) newspeed = 0;
+  newspeed /= speed;
+  velocity[0] *= newspeed;
+  velocity[1] *= newspeed;
+  velocity[2] *= newspeed;
+}
 
 // ---------------------------------------------------------------------------
 // PM_Accelerate (pmove.c:407-422)

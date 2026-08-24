@@ -17,16 +17,18 @@
 const pm_stopspeed = 100;
 const pm_maxspeed = 300;
 const pm_accelerate = 10;
-const pm_airaccelerate = 0; // vanilla Q2/SoF default -- this is the crux of Chapter 4
+// Confirmed by decompiling the retail SoF.exe binary: pm_airaccelerate is
+// statically initialized to 1.0 and never written anywhere else in the
+// executable -- it's a permanent constant, not a togglable cvar in the
+// shipped game. Kept as 0 here only as a flag for which formula this file's
+// pmAirMoveSteps takes (see below); the real game reaches the exact same
+// numeric result (accel = 1 in air) by always using this hardcoded 1.0
+// directly, with no if/else at all -- the special 30-unit-cap
+// PM_AirAccelerate formula below is never actually reachable in retail SoF.
+const pm_airaccelerate = 0;
 const pm_duckspeed = 100;
 const pm_friction = 6;
 
-// ---------------------------------------------------------------------------
-// PM_Friction, ground-only (pmove.c:355-397, water branch omitted -- this
-// app never simulates water). Not one of the course's stepped lessons; it's
-// here purely so Chapter 7's 3D playground can stop rolling forever once you
-// let go of the keys on the ground, the same way the real game does.
-// ---------------------------------------------------------------------------
 // PM_CatagorizePosition's ground-leave velocity check (pmove.c:704-707).
 // #define SOF is active in this file by default (line 23), so 100 is what
 // actually ships; 180 is what stock Quake 2 uses without that patch. Moving
@@ -57,6 +59,12 @@ function pmCheckJump(jumpState, upmove, grounded) {
   return true;
 }
 
+// ---------------------------------------------------------------------------
+// PM_Friction, ground-only (pmove.c:355-397, water branch omitted -- this
+// app never simulates water). Not one of the course's stepped lessons; it's
+// here purely so Chapter 7's 3D playground can stop rolling forever once you
+// let go of the keys on the ground, the same way the real game does.
+// ---------------------------------------------------------------------------
 function pmGroundFriction(velocity, frametime) {
   const speed = VectorLength(velocity);
   if (speed < 1) {
@@ -143,11 +151,13 @@ function* pmAccelerateSteps(velocity, wishdir, wishspeed, accel, frametime) {
 // ---------------------------------------------------------------------------
 // PM_AirAccelerate (pmove.c:424-441)
 //
-// Only used when the pm_airaccelerate cvar is non-zero (off by default in
-// vanilla Q2/SoF -- see Chapter 4). Identical to PM_Accelerate except the
-// *wished* speed used for the addspeed comparison is capped to 30 units/sec,
-// even though the full wishspeed is still used to size accelspeed. This is
-// what some mods/engines use to make air control gentler and more skill-based.
+// Present in the source, but confirmed unreachable in the retail SoF.exe
+// binary -- its only caller there always takes the plain PM_Accelerate path
+// instead (see pm_airaccelerate above). Kept here as a faithful 1:1 port of
+// real source code that some other Quake 2 engines/mods do actually use.
+// Identical to PM_Accelerate except the *wished* speed used for the addspeed
+// comparison is capped to 30 units/sec, even though the full wishspeed is
+// still used to size accelspeed -- gentler, more skill-based air control.
 // ---------------------------------------------------------------------------
 function* pmAirAccelerateSteps(velocity, wishdir, wishspeed, accel, frametime) {
   yield { id: "decl", label: "declare locals", locals: {} };

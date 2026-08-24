@@ -62,6 +62,26 @@ const ACCELERATE_MAP = {
   apply: { c: [420, 421], js: [16, 17] },
 };
 
+// Plain-English descriptions for each PM_Accelerate step, shared by every
+// debugger instance that walks this function (Chapter 3's own debugger,
+// and Chapter 6/7's "Freeze & inspect" panels) -- one set of wording, not
+// three copies that can drift out of sync. Each plain term is immediately
+// followed by the exact variable name it refers to in the code panel
+// (amber, monospace) so nobody has to hover or look anything up.
+const VARNAME = (name) => `<span class="varname">${name}</span>`;
+const ACCELERATE_DESCRIPTIONS = {
+  decl: `We know 3 things: which way you're trying to go (${VARNAME("wishdir")}), how fast you want to go (${VARNAME("wishspeed")}), and how strong the boost is (${VARNAME("accel")}).`,
+  currentspeed: `Measure your <b>speed toward target</b> (${VARNAME("currentspeed")}): of all your current motion (${VARNAME("velocity")}), how much of it already points the way you're trying to go. Sideways motion doesn't count at all.`,
+  addspeed: `Work out how much speed room is left (${VARNAME("addspeed")}) before you'd hit your target speed.`,
+  "early-return": `No room left (${VARNAME("addspeed")} ≤ 0) — you're already going fast enough that way. Nothing changes.`,
+  accelspeed: `Work out this step's boost (${VARNAME("accelspeed")}): boost power × tick length × target speed.`,
+  clamp: `Don't overshoot. If the boost (${VARNAME("accelspeed")}) is bigger than the room left (${VARNAME("addspeed")}), shrink it to fit.`,
+  apply: `Add the boost — but <strong>only</strong> in the direction you're trying to go (${VARNAME("wishdir")}). Everything sideways to that is left completely alone.`,
+};
+function describeAccelerateStep(step) {
+  return `<div>${ACCELERATE_DESCRIPTIONS[step.id] || ""}</div>`;
+}
+
 // --- pmove.c : PM_AirAccelerate (lines 424-441) ------------------------------
 const C_AIR_ACCELERATE = block(424, `
 void PM_AirAccelerate (vec3_t wishdir, float wishspeed, float accel)

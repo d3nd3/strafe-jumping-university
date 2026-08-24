@@ -1,17 +1,6 @@
-// Every plain-English term below is immediately followed by the exact
-// variable name it refers to in the code panel (amber, monospace) -- so
-// "target direction" and "wishdir" are always visibly the same thing,
-// without needing a hover or a separate legend to look up.
-const V = (name) => `<span class="varname">${name}</span>`;
-const DESCRIPTIONS = {
-  decl: `We know 3 things: which way you're trying to go (${V("wishdir")}), how fast you want to go (${V("wishspeed")}), and how strong the boost is (${V("accel")}).`,
-  currentspeed: `Check how much of your current motion (${V("velocity")}) is already pointed the way you're trying to go. That amount is ${V("currentspeed")}.`,
-  addspeed: `Work out how much speed room is left (${V("addspeed")}) before you'd hit your target speed.`,
-  "early-return": `No room left (${V("addspeed")} ≤ 0) — you're already going fast enough that way. Nothing changes.`,
-  accelspeed: `Work out this step's boost (${V("accelspeed")}): boost power × tick length × target speed.`,
-  clamp: `Don't overshoot. If the boost (${V("accelspeed")}) is bigger than the room left (${V("addspeed")}), shrink it to fit.`,
-  apply: `Add the boost — but <strong>only</strong> in the direction you're trying to go (${V("wishdir")}). Everything sideways to that is left completely alone.`,
-};
+// The step descriptions (ACCELERATE_DESCRIPTIONS / describeAccelerateStep)
+// live in core/sourceText.js -- Chapter 6 and 7's "Freeze & inspect" panels
+// walk this same function and share the exact same wording, not a copy.
 
 function mountCh3Debugger(section) {
   section.innerHTML = `
@@ -64,9 +53,10 @@ function mountCh3Debugger(section) {
     </div>
 
     <div class="callout good">
-      Try angle ≈ 90° with a high starting speed. Almost none of your speed already points the
-      target way, so nearly the whole boost gets added — and your <em>total</em> speed after can
-      end up higher than your target speed. That's the whole trick.
+      Try angle ≈ 90° with a high starting speed. Your speed toward target comes out near zero
+      (almost none of your motion points the target way yet), so nearly the whole boost gets
+      added — and your <em>total</em> speed after can end up higher than your target speed.
+      That's the whole trick.
     </div>
 
     <a class="next-link" href="#ch4-air-vs-ground">Continue → Chapter 4: ground vs. air</a>
@@ -127,7 +117,7 @@ function mountCh3Debugger(section) {
       const cs = step.locals.currentspeed;
       const proj = [wishdirVec[0] * cs, wishdirVec[1] * cs];
       scene.line([originalVelocity[0], originalVelocity[1]], proj, { color: "rgba(255,255,255,0.35)" });
-      scene.point(proj, { color: "#fff", label: "already matches" });
+      scene.point(proj, { color: "#fff", label: "speed toward target" });
       if ("addspeed" in step.locals) {
         const target = [wishdirVec[0] * wishspeedNum, wishdirVec[1] * wishspeedNum];
         scene.line(proj, target, { color: "rgba(255,209,102,0.7)", dash: [3, 3], width: 3 });
@@ -147,7 +137,7 @@ function mountCh3Debugger(section) {
     jsSource: JS_ACCELERATE,
     map: ACCELERATE_MAP,
     makeGenerator,
-    describe: (step) => `<div>${DESCRIPTIONS[step.id] || ""}</div>`,
+    describe: describeAccelerateStep,
   });
   dbg.onChange(draw);
   scene.setRedraw(() => draw(dbg.currentStep));

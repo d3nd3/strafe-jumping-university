@@ -18,14 +18,15 @@ function mountCh7Recap(section) {
     </div>
 
     <h2>Word list</h2>
+    <p class="muted">Real code name shown next to each, same as everywhere else in this app.</p>
     <dl class="glossary">
-      <dt>target direction</dt><dd>The way your keys + mouse say you want to go right now.</dd>
-      <dt>target speed</dt><dd>How fast you're trying to go, capped at 300.</dd>
-      <dt>already matches</dt><dd>How much of your current speed already points the target way.</dd>
-      <dt>room left to speed up</dt><dd>Target speed minus what already matches. Zero means no boost this instant.</dd>
-      <dt>boost power</dt><dd>How strong the push is: 10 on the ground, 1 in the air by default.</dd>
-      <dt>tick length</dt><dd>How much time passed since the last update.</dd>
-      <dt>top speed (300)</dt><dd>The cap on your <em>target</em> speed — not a cap on your actual speed. That gap is the whole trick.</dd>
+      <dt>target direction <span class="varname">wishdir</span></dt><dd>The way your keys + mouse say you want to go right now.</dd>
+      <dt>target speed <span class="varname">wishspeed</span></dt><dd>How fast you're trying to go, capped at 300.</dd>
+      <dt>speed toward target <span class="varname">currentspeed</span></dt><dd>Of your current motion, how much already points the target way. Sideways motion doesn't count.</dd>
+      <dt>room left to speed up <span class="varname">addspeed</span></dt><dd>Target speed minus speed toward target. Zero means no boost this instant.</dd>
+      <dt>boost power <span class="varname">accel</span></dt><dd>How strong the push is: 10 on the ground, 1 in the air by default.</dd>
+      <dt>tick length <span class="varname">frametime</span></dt><dd>How much time passed since the last update.</dd>
+      <dt>top speed (300) <span class="varname">pm_maxspeed</span></dt><dd>The cap on your <em>target</em> speed — not a cap on your actual speed. That gap is the whole trick.</dd>
     </dl>
 
     <div class="callout good" style="margin-top:30px">

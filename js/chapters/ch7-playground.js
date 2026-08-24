@@ -6,14 +6,20 @@
 
 const CH7_FRAMETIME = 0.01; // fixed 100 updates/sec, same as Chapter 6
 const CH7_GRAVITY = 800; // typical Quake 2 sv_gravity default
-const CH7_JUMP_VELOCITY = 270; // pmove.c:868 -- pml.velocity[2] += 270
+const CH7_JUMP_VELOCITY = 270; // real SoF.exe PM_CheckJump: pml.velocity[2] = 270.0 (a flat
+// assignment, not the leaked pmove.c source's "+= 270, clamp to min 270" -- confirmed by
+// decompiling the retail binary. Jumping off a fast ramp launch resets your vertical speed
+// to exactly 270 rather than adding on top of it.
 const CH7_TRAIL_MAX = 260;
 
 // A single ramp, purely so the SOF-vs-Q2 ground-leave threshold (see
 // physics.js) has something to actually be felt on -- on flat ground the two
-// settings behave identically. Rises from 0 to 70 units between x=200..400.
-const RAMP_X0 = 200, RAMP_X1 = 400, RAMP_H = 70;
-function groundHeightAt(x) {
+// settings behave identically. Rises from 0 to 70 units between x=200..400,
+// and is only as wide (in y) as the mesh actually drawn for it -- otherwise
+// there'd be invisible collision extending forever past its visible edges.
+const RAMP_X0 = 200, RAMP_X1 = 400, RAMP_H = 70, RAMP_HALF_WIDTH = 260;
+function groundHeightAt(x, y) {
+  if (Math.abs(y) > RAMP_HALF_WIDTH) return 0;
   if (x <= RAMP_X0) return 0;
   if (x >= RAMP_X1) return RAMP_H;
   return ((x - RAMP_X0) / (RAMP_X1 - RAMP_X0)) * RAMP_H;
@@ -64,11 +70,12 @@ function mountCh7Playground(section) {
           <div class="btn-row" style="margin-top:10px">
             <button class="btn" id="pg-reset">⟲ Reset</button>
             <button class="btn primary" id="pg-debug">⏸ Freeze &amp; inspect</button>
+            <button class="btn" id="pg-fullscreen">⛶ Fullscreen (F)</button>
           </div>
           <p class="muted" style="font-size:12.5px;margin-top:10px" id="pg-hint">
             Click the scene, then <b>W/S</b> move, <b>A/D</b> strafe, <b>←/→</b> turn,
-            <b>Space</b> jump (hold it through a landing to auto-hop). Air-strafe by tapping turn
-            while airborne.
+            <b>Space</b> jump (hold it through a landing to auto-hop), <b>F</b> fullscreen.
+            Air-strafe by tapping turn while airborne.
           </p>
         </div>
         <div class="panel-col" style="flex:1 1 480px">
@@ -128,9 +135,34 @@ function mountCh7Playground(section) {
   sun.position.set(600, 900, 400);
   scene.add(sun);
 
+  // A small procedural tile (no external image assets) repeated across the
+  // ground so flat ground still reads as a surface with texture, not a flat
+  // fill color.
+  function makeGroundTexture() {
+    const size = 128;
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const tctx = c.getContext("2d");
+    tctx.fillStyle = "#0e1310";
+    tctx.fillRect(0, 0, size, size);
+    tctx.strokeStyle = "rgba(125,255,176,0.07)";
+    tctx.lineWidth = 1;
+    tctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+    tctx.fillStyle = "rgba(125,255,176,0.05)";
+    for (let i = 0; i < 24; i++) {
+      const x = (i * 53) % size;
+      const y = (i * 97) % size;
+      tctx.fillRect(x, y, 2, 2);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(60, 60);
+    return tex;
+  }
+
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(8000, 8000),
-    new THREE.MeshStandardMaterial({ color: 0x0e1310, roughness: 1 })
+    new THREE.MeshStandardMaterial({ color: 0x0e1310, roughness: 1, map: makeGroundTexture() })
   );
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
@@ -141,7 +173,7 @@ function mountCh7Playground(section) {
   // The ramp: matches groundHeightAt() exactly (physics x -> three x here,
   // no rotation needed) so what you see is what you collide with.
   {
-    const zHalf = 260;
+    const zHalf = RAMP_HALF_WIDTH;
     const positions = new Float32Array([
       // top surface (2 triangles)
       RAMP_X0, 0, -zHalf, RAMP_X1, RAMP_H, -zHalf, RAMP_X1, RAMP_H, zHalf,
@@ -245,8 +277,51 @@ function mountCh7Playground(section) {
     const k = e.key.toLowerCase();
     keys.add(k);
     if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(k)) e.preventDefault();
+    if (k === "f" && !e.repeat) toggleFullscreen();
   });
   wrap.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+  // ---- fullscreen (press F, or the button) ----
+  function toggleFullscreen() {
+    if (document.fullscreenElement === wrap) {
+      document.exitFullscreen();
+    } else if (wrap.requestFullscreen) {
+      wrap.requestFullscreen();
+    }
+  }
+  const fullscreenBtn = section.querySelector("#pg-fullscreen");
+  fullscreenBtn.addEventListener("click", () => {
+    wrap.focus();
+    toggleFullscreen();
+  });
+  document.addEventListener("fullscreenchange", () => {
+    fullscreenBtn.textContent = document.fullscreenElement === wrap ? "⛶ Exit fullscreen (F)" : "⛶ Fullscreen (F)";
+  });
+
+  // ---- jump sound: a quick synthesized rising blip, no audio file needed ----
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx && (window.AudioContext || window.webkitAudioContext)) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function playJumpSound() {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    const t0 = ctx.currentTime;
+    osc.frequency.setValueAtTime(320, t0);
+    osc.frequency.exponentialRampToValueAtTime(760, t0 + 0.11);
+    gain.gain.setValueAtTime(0.11, t0);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + 0.15);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.16);
+  }
 
   // ---- mouse-look (Pointer Lock), optional -- arrow keys always still work ----
   const mouselookToggle = section.querySelector("#pg-mouselook");
@@ -261,6 +336,7 @@ function mountCh7Playground(section) {
 
   wrap.addEventListener("click", () => {
     wrap.focus();
+    ensureAudio();
     if (mouselookToggle.checked && wrap.requestPointerLock) wrap.requestPointerLock();
   });
 
@@ -281,7 +357,7 @@ function mountCh7Playground(section) {
   });
 
   // ---- movement state (vec3 convention: x,y horizontal, z up) ----
-  let position, velocity, yaw, grounded, trailPts, camYaw, camPitch;
+  let position, velocity, yaw, grounded, trailPts, camYaw;
   let lastFrame = null;
   let paused = false;
 
@@ -292,7 +368,6 @@ function mountCh7Playground(section) {
     grounded = true;
     trailPts = [];
     camYaw = 0;
-    camPitch = 0.28;
     lastFrame = null;
     jumpState.held = false;
   }
@@ -313,8 +388,9 @@ function mountCh7Playground(section) {
 
     const upmove = keys.has(" ") ? 400 : 0;
     if (pmCheckJump(jumpState, upmove, grounded)) {
-      velocity[2] = Math.max(velocity[2] + CH7_JUMP_VELOCITY, CH7_JUMP_VELOCITY);
+      velocity[2] = CH7_JUMP_VELOCITY;
       grounded = false;
+      playJumpSound();
     }
 
     if (grounded) pmGroundFriction(velocity, CH7_FRAMETIME);
@@ -372,7 +448,7 @@ function mountCh7Playground(section) {
     // ground-leave threshold actually does something: run up the ramp fast
     // enough and you're still touching it, but already being treated as
     // airborne.
-    const groundH = groundHeightAt(position[0]);
+    const groundH = groundHeightAt(position[0], position[1]);
     const touching = position[2] <= groundH;
     if (touching) {
       position[2] = groundH;
@@ -480,6 +556,7 @@ function mountCh7Playground(section) {
       cSource: C_ACCELERATE,
       jsSource: JS_ACCELERATE,
       map: ACCELERATE_MAP,
+      describe: describeAccelerateStep,
       makeGenerator: () =>
         pmAccelerateSteps([...lastFrame.velocityBefore], lastFrame.wishdir, lastFrame.wishspeed, lastFrame.accel, lastFrame.frametime),
     });

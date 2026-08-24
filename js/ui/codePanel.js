@@ -29,7 +29,7 @@ function fmtVal(v) {
 // "watch" list next to it is plain-English on purpose -- nobody should have
 // to already know what "wishdir" means to follow along.
 const FRIENDLY_LABELS = {
-  currentspeed: "speed already aimed right",
+  currentspeed: "speed toward target",
   addspeed: "room left to speed up",
   accelspeed: "speed boost this step",
   wishdir: "target direction",

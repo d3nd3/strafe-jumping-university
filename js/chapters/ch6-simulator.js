@@ -223,6 +223,7 @@ function mountCh6Simulator(section) {
       cSource: C_ACCELERATE,
       jsSource: JS_ACCELERATE,
       map: ACCELERATE_MAP,
+      describe: describeAccelerateStep,
       makeGenerator: () =>
         pmAccelerateSteps(
           [...lastFrame.velocityBefore],

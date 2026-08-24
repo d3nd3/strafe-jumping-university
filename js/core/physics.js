@@ -83,6 +83,24 @@ function pmGroundFriction(velocity, frametime) {
 }
 
 // ---------------------------------------------------------------------------
+// PM_ClipVelocity (pmove.c:80-95) -- removes the part of a velocity that
+// points into a surface, leaving only the part that runs along it. This is
+// what makes hitting a wall at an angle *slide* you along it instead of
+// stopping you dead. Returns a new vector rather than writing through an
+// "out" pointer like the C version, since JS has no by-reference args.
+// ---------------------------------------------------------------------------
+const STOP_EPSILON = 0.1;
+function pmClipVelocity(inVel, normal, overbounce) {
+  const backoff = DotProduct(inVel, normal) * overbounce;
+  const out = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    out[i] = inVel[i] - normal[i] * backoff;
+    if (out[i] > -STOP_EPSILON && out[i] < STOP_EPSILON) out[i] = 0;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // PM_Accelerate (pmove.c:407-422)
 //
 // wishdir/wishspeed describe what the player *wants*: a direction and a

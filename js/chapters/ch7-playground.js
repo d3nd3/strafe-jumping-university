@@ -25,6 +25,20 @@ function groundHeightAt(x, y) {
   return ((x - RAMP_X0) / (RAMP_X1 - RAMP_X0)) * RAMP_H;
 }
 
+// A single solid wall -- the only thing in the scene you can actually run
+// into and get stopped/deflected by. The pillars scattered around are just
+// visual landmarks, not collidable; building real trace-based collision for
+// arbitrary geometry is out of scope, so this one flat wall is where
+// PM_ClipVelocity / PM_StepSlideMove_'s "rub" behavior (pmove.c's own
+// `#ifdef SOF` block) gets ported in and made toggleable.
+const WALL_X = -480; // physics x of the wall's near (player-facing) face
+const WALL_Y0 = -220,
+  WALL_Y1 = 220;
+const WALL_THICKNESS = 20,
+  WALL_HEIGHT = 140;
+const WALL_NORMAL = [1, 0, 0]; // points away from the wall, toward the spawn point
+const PLAYER_RADIUS = 18; // matches the player capsule's visual radius, so the collision feels like it lines up with what you see
+
 // physics.js's vec3 convention is x,y horizontal + z up (matching pmove.c).
 // three.js is x,z horizontal + y up. This is the only place that mapping happens.
 function toThree(v, out) {
@@ -46,6 +60,7 @@ function mountCh7Playground(section) {
             <div class="hud-stat" id="pg-gain-stat"><span class="k">RIGHT NOW</span><span class="v" id="pg-gain">—</span></div>
             <div class="hud-stat"><span class="k">ON GROUND?</span><span class="v" id="pg-ground">yes</span></div>
             <div class="hud-stat"><span class="k">VERTICAL SPEED</span><span class="v" id="pg-vspeed">0</span></div>
+            <div class="hud-stat"><span class="k">MAX SPEED</span><span class="v" id="pg-maxspeed">300</span></div>
           </div>
           <div class="control-row">
             <label><span>turning speed</span><span id="pg-turnrate-val">180°/s</span></label>
@@ -64,7 +79,7 @@ function mountCh7Playground(section) {
             SOF physics (uncheck for Quake 2)
           </label>
           <p class="muted" style="font-size:12px;margin:2px 0 0">
-            Two real differences between the two games, ported from SoF's own movement code:
+            Three real differences between the two games, ported from SoF's own movement code:
             <br />1. You leave the ground once your upward speed passes 100 u/s (checked) instead
             of Quake 2's 180 u/s (unchecked) — run up the ramp on the right to feel it; lower means
             less of your launch speed gets eaten by ground friction before you're airborne.
@@ -73,6 +88,10 @@ function mountCh7Playground(section) {
             gets zeroed on the very next frame either way, so use <b>Freeze &amp; inspect</b> right
             as you land and watch <b>VERTICAL SPEED</b> in the HUD to see it: 0 in SOF, still your
             fall speed in Quake 2, for that one frame.
+            <br />3. Run straight into the wall on the left: SOF (checked) "rubs" extra speed off
+            you on impact — hit it dead-on and lose about half your speed, graze it at an angle and
+            barely lose any. Quake 2 (unchecked) skips that scrub and keeps 100% of whatever speed
+            survives the slide, so wall-sliding is faster there.
           </p>
           <div class="btn-row" style="margin-top:10px">
             <button class="btn" id="pg-reset">⟲ Reset</button>
@@ -81,8 +100,12 @@ function mountCh7Playground(section) {
           </div>
           <p class="muted" style="font-size:12.5px;margin-top:10px" id="pg-hint">
             Click the scene, then <b>W/S</b> move, <b>A/D</b> strafe, <b>←/→</b> turn,
-            <b>Space</b> jump (hold it through a landing to auto-hop), <b>F</b> fullscreen.
-            Air-strafe by tapping turn while airborne.
+            <b>Space</b> jump (hold it through a landing to auto-hop), <b>Ctrl</b> crouch
+            (caps your speed at 100 while grounded, see MAX SPEED in the HUD), <b>F</b> fullscreen.
+            Air-strafe by tapping turn while airborne. Turn around and head back past your
+            spawn point to find a wall — it's the one thing here you can actually collide
+            with and slide along; everything else besides the ground and ramp is just
+            decoration.
           </p>
         </div>
         <div class="panel-col" style="flex:1 1 480px">
@@ -118,6 +141,7 @@ function mountCh7Playground(section) {
   const gainStat = section.querySelector("#pg-gain-stat");
   const groundEl = section.querySelector("#pg-ground");
   const vspeedEl = section.querySelector("#pg-vspeed");
+  const maxspeedEl = section.querySelector("#pg-maxspeed");
   const turnRateInput = section.querySelector("#pg-turnrate");
   const turnRateVal = section.querySelector("#pg-turnrate-val");
   const vectorsToggle = section.querySelector("#pg-vectors");
@@ -195,6 +219,16 @@ function mountCh7Playground(section) {
     rampGeom.computeVertexNormals();
     const ramp = new THREE.Mesh(rampGeom, new THREE.MeshStandardMaterial({ color: 0x24382c, side: THREE.DoubleSide }));
     scene.add(ramp);
+  }
+
+  // The one collidable wall (see WALL_X etc. above). toThree()'s mapping
+  // means physics x stays three.js x, physics z(height) becomes three.js y,
+  // physics y becomes three.js z.
+  {
+    const wallGeom = new THREE.BoxGeometry(WALL_THICKNESS, WALL_HEIGHT, WALL_Y1 - WALL_Y0);
+    const wallMesh = new THREE.Mesh(wallGeom, new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 0.9 }));
+    wallMesh.position.set(WALL_X - WALL_THICKNESS / 2, WALL_HEIGHT / 2, (WALL_Y0 + WALL_Y1) / 2);
+    scene.add(wallMesh);
   }
 
   // A scattering of simple pillars purely as visual landmarks -- not
@@ -365,7 +399,7 @@ function mountCh7Playground(section) {
   });
 
   // ---- movement state (vec3 convention: x,y horizontal, z up) ----
-  let position, velocity, yaw, grounded, trailPts, camYaw;
+  let position, velocity, yaw, grounded, trailPts, camYaw, ducked;
   let lastFrame = null;
   let paused = false;
 
@@ -376,6 +410,7 @@ function mountCh7Playground(section) {
     grounded = true;
     trailPts = [];
     camYaw = 0;
+    ducked = false;
     lastFrame = null;
     jumpState.held = false;
   }
@@ -403,6 +438,13 @@ function mountCh7Playground(section) {
 
     if (grounded) pmGroundFriction(velocity, CH7_FRAMETIME);
 
+    // PM_CheckDuck (pmove.c:1024-1074): holding crouch only takes effect
+    // while touching the ground, matching real Quake -- and since this
+    // world has no ceilings to trap you under, standing back up is always
+    // instant here (the real game re-traces to check headroom first).
+    ducked = keys.has("control") && grounded;
+    const maxspeed = ducked ? pm_duckspeed : pm_maxspeed;
+
     let fmove = 0,
       smove = 0;
     if (keys.has("w")) fmove += 400;
@@ -421,7 +463,7 @@ function mountCh7Playground(section) {
     const wishvel = [forward[0] * fmove - right[0] * smove, forward[1] * fmove - right[1] * smove, 0];
     const wishdir = [...wishvel];
     let wishspeed = VectorNormalize(wishdir);
-    if (wishspeed > pm_maxspeed) wishspeed = pm_maxspeed;
+    if (wishspeed > maxspeed) wishspeed = maxspeed;
 
     const before = [...velocity];
     const accelUsed = grounded ? pm_accelerate : 1;
@@ -446,9 +488,52 @@ function mountCh7Playground(section) {
       frametime: CH7_FRAMETIME,
       addspeed: result.addspeed,
       grounded,
+      maxspeed,
+      ducked,
     };
 
-    position = [position[0] + velocity[0] * CH7_FRAMETIME, position[1] + velocity[1] * CH7_FRAMETIME, position[2] + velocity[2] * CH7_FRAMETIME];
+    let newPos = [
+      position[0] + velocity[0] * CH7_FRAMETIME,
+      position[1] + velocity[1] * CH7_FRAMETIME,
+      position[2] + velocity[2] * CH7_FRAMETIME,
+    ];
+
+    // Wall collision: a single-plane simplification of PM_StepSlideMove_
+    // (pmove.c:113-263). Real Quake bumps up to 4 times against up to 5
+    // planes per frame to handle corners and creases; this wall is one flat
+    // obstacle, so the very first (and only) plane it can ever hit is all
+    // that's needed here.
+    if (
+      position[0] > WALL_X + PLAYER_RADIUS &&
+      newPos[0] <= WALL_X + PLAYER_RADIUS &&
+      newPos[1] > WALL_Y0 &&
+      newPos[1] < WALL_Y1
+    ) {
+      const dir = [...velocity];
+      VectorNormalize(dir);
+      const clipped = pmClipVelocity(velocity, WALL_NORMAL, 1.01);
+      if (sofToggle.checked) {
+        // pmove.c's own `#ifdef SOF` branch: after clipping, "rub" extra
+        // speed off depending on how head-on the hit was -- a graze barely
+        // slows you, a dead-on hit roughly halves your speed. Stock Quake 2
+        // (the `#else` branch, same file) has no such scrub: it keeps 100%
+        // of the clipped slide speed, so wall-sliding stays faster there.
+        const rub = 1.0 + 0.5 * DotProduct(dir, WALL_NORMAL);
+        velocity[0] = clipped[0] * rub;
+        velocity[1] = clipped[1] * rub;
+        velocity[2] = clipped[2] * rub;
+      } else {
+        velocity[0] = clipped[0];
+        velocity[1] = clipped[1];
+        velocity[2] = clipped[2];
+      }
+      newPos = [
+        position[0] + velocity[0] * CH7_FRAMETIME,
+        position[1] + velocity[1] * CH7_FRAMETIME,
+        position[2] + velocity[2] * CH7_FRAMETIME,
+      ];
+    }
+    position = newPos;
 
     // Physical contact (never tunnel through the ground/ramp) is separate
     // from "grounded" for gameplay purposes (friction + ground accel) --
@@ -484,6 +569,8 @@ function mountCh7Playground(section) {
     toThree(position, tmpV);
     player.position.copy(tmpV);
     player.rotation.y = -yaw + Math.PI / 2;
+    const duckScale = ducked ? 0.55 : 1;
+    player.scale.y += (duckScale - player.scale.y) * 0.35;
 
     const speed = VectorLength(velocity);
     const gaining = lastFrame ? lastFrame.addspeed > 0 : false;
@@ -530,7 +617,7 @@ function mountCh7Playground(section) {
     // looking roughly where they're facing.
     camYaw += (yaw - camYaw) * 0.12;
     const dist = 220;
-    const height = 110;
+    const height = ducked ? 78 : 110;
     tmpCamPos.set(tmpV.x - Math.cos(camYaw) * dist, tmpV.y + height, tmpV.z - Math.sin(camYaw) * dist);
     camera.position.lerp(tmpCamPos, 0.18);
     tmpCamTarget.set(tmpV.x, tmpV.y + 50, tmpV.z);
@@ -541,6 +628,7 @@ function mountCh7Playground(section) {
       gainEl.textContent = gaining ? "gaining speed" : "not gaining";
       gainStat.classList.toggle("warn", !gaining);
       groundEl.textContent = lastFrame.grounded ? "yes" : "no";
+      maxspeedEl.textContent = lastFrame.maxspeed.toFixed(0);
     }
     vspeedEl.textContent = velocity[2].toFixed(0);
 

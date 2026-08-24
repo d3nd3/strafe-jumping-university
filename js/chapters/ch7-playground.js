@@ -9,6 +9,16 @@ const CH7_GRAVITY = 800; // typical Quake 2 sv_gravity default
 const CH7_JUMP_VELOCITY = 270; // pmove.c:868 -- pml.velocity[2] += 270
 const CH7_TRAIL_MAX = 260;
 
+// A single ramp, purely so the SOF-vs-Q2 ground-leave threshold (see
+// physics.js) has something to actually be felt on -- on flat ground the two
+// settings behave identically. Rises from 0 to 70 units between x=200..400.
+const RAMP_X0 = 200, RAMP_X1 = 400, RAMP_H = 70;
+function groundHeightAt(x) {
+  if (x <= RAMP_X0) return 0;
+  if (x >= RAMP_X1) return RAMP_H;
+  return ((x - RAMP_X0) / (RAMP_X1 - RAMP_X0)) * RAMP_H;
+}
+
 // physics.js's vec3 convention is x,y horizontal + z up (matching pmove.c).
 // three.js is x,z horizontal + y up. This is the only place that mapping happens.
 function toThree(v, out) {
@@ -38,13 +48,27 @@ function mountCh7Playground(section) {
             <input type="checkbox" id="pg-vectors" checked style="accent-color:var(--accent)" />
             show direction arrows
           </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-top:6px">
+            <input type="checkbox" id="pg-mouselook" style="accent-color:var(--accent)" />
+            turn with mouse (click scene to lock)
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);margin-top:6px">
+            <input type="checkbox" id="pg-sof" checked style="accent-color:var(--accent)" />
+            SOF ground-leave tweak
+          </label>
+          <p class="muted" style="font-size:12px;margin:2px 0 0">
+            This file's own <code>#ifdef SOF</code>: leaves the ground above 100 u/s of upward
+            speed (checked) vs. stock Quake 2's 180 u/s (unchecked). Run up the ramp on the right
+            to feel it — lower means less of your launch speed gets eaten by ground friction.
+          </p>
           <div class="btn-row" style="margin-top:10px">
             <button class="btn" id="pg-reset">⟲ Reset</button>
             <button class="btn primary" id="pg-debug">⏸ Freeze &amp; inspect</button>
           </div>
-          <p class="muted" style="font-size:12.5px;margin-top:10px">
+          <p class="muted" style="font-size:12.5px;margin-top:10px" id="pg-hint">
             Click the scene, then <b>W/S</b> move, <b>A/D</b> strafe, <b>←/→</b> turn,
-            <b>Space</b> jump. Air-strafe by tapping turn while airborne.
+            <b>Space</b> jump (hold it through a landing to auto-hop). Air-strafe by tapping turn
+            while airborne.
           </p>
         </div>
         <div class="panel-col" style="flex:1 1 480px">
@@ -113,6 +137,25 @@ function mountCh7Playground(section) {
 
   const grid = new THREE.GridHelper(8000, 80, 0x2f4a3a, 0x1a251e);
   scene.add(grid);
+
+  // The ramp: matches groundHeightAt() exactly (physics x -> three x here,
+  // no rotation needed) so what you see is what you collide with.
+  {
+    const zHalf = 260;
+    const positions = new Float32Array([
+      // top surface (2 triangles)
+      RAMP_X0, 0, -zHalf, RAMP_X1, RAMP_H, -zHalf, RAMP_X1, RAMP_H, zHalf,
+      RAMP_X0, 0, -zHalf, RAMP_X1, RAMP_H, zHalf, RAMP_X0, 0, zHalf,
+      // back riser (2 triangles)
+      RAMP_X1, 0, -zHalf, RAMP_X1, RAMP_H, -zHalf, RAMP_X1, RAMP_H, zHalf,
+      RAMP_X1, 0, -zHalf, RAMP_X1, RAMP_H, zHalf, RAMP_X1, 0, zHalf,
+    ]);
+    const rampGeom = new THREE.BufferGeometry();
+    rampGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    rampGeom.computeVertexNormals();
+    const ramp = new THREE.Mesh(rampGeom, new THREE.MeshStandardMaterial({ color: 0x24382c, side: THREE.DoubleSide }));
+    scene.add(ramp);
+  }
 
   // A scattering of simple pillars purely as visual landmarks -- not
   // collidable, just something to judge speed and turning against.
@@ -196,14 +239,46 @@ function mountCh7Playground(section) {
 
   // ---- input ----
   const keys = new Set();
-  let spaceHeld = false;
+  const jumpState = { held: false }; // consumed by physics.js's pmCheckJump
+  const sofToggle = section.querySelector("#pg-sof");
   wrap.addEventListener("keydown", (e) => {
     const k = e.key.toLowerCase();
     keys.add(k);
     if (["arrowleft", "arrowright", "arrowup", "arrowdown", " "].includes(k)) e.preventDefault();
   });
   wrap.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
-  wrap.addEventListener("click", () => wrap.focus());
+
+  // ---- mouse-look (Pointer Lock), optional -- arrow keys always still work ----
+  const mouselookToggle = section.querySelector("#pg-mouselook");
+  const hintEl = section.querySelector("#pg-hint");
+  const defaultHintHTML = hintEl.innerHTML;
+  const MOUSE_SENSITIVITY = 0.0022; // radians of yaw per pixel of mouse movement
+  let pendingYawDelta = 0;
+
+  function isLocked() {
+    return document.pointerLockElement === wrap;
+  }
+
+  wrap.addEventListener("click", () => {
+    wrap.focus();
+    if (mouselookToggle.checked && wrap.requestPointerLock) wrap.requestPointerLock();
+  });
+
+  document.addEventListener("mousemove", (e) => {
+    if (isLocked()) pendingYawDelta += e.movementX * MOUSE_SENSITIVITY;
+  });
+
+  document.addEventListener("pointerlockchange", () => {
+    const locked = isLocked();
+    wrap.style.cursor = locked ? "none" : "crosshair";
+    hintEl.innerHTML = locked
+      ? "Mouse locked — move the mouse to turn, <b>Esc</b> to release. W/S move, A/D strafe, Space jump."
+      : defaultHintHTML;
+  });
+
+  mouselookToggle.addEventListener("change", () => {
+    if (!mouselookToggle.checked && isLocked()) document.exitPointerLock();
+  });
 
   // ---- movement state (vec3 convention: x,y horizontal, z up) ----
   let position, velocity, yaw, grounded, trailPts, camYaw, camPitch;
@@ -219,18 +294,25 @@ function mountCh7Playground(section) {
     camYaw = 0;
     camPitch = 0.28;
     lastFrame = null;
+    jumpState.held = false;
   }
 
   function tick() {
     const turnRateDegPerSec = +turnRateInput.value;
-    if (keys.has("arrowleft")) yaw += ((turnRateDegPerSec * Math.PI) / 180) * CH7_FRAMETIME;
-    if (keys.has("arrowright")) yaw -= ((turnRateDegPerSec * Math.PI) / 180) * CH7_FRAMETIME;
+    // Note the sign here is opposite of Chapter 6's: this chapter's toThree()
+    // mapping (physics Z-up -> three.js Y-up) swaps two axes, which flips
+    // handedness for orientation (same reason the strafe direction needed
+    // compensating below). Verified against the actual rendered camera, not
+    // just derived on paper.
+    if (keys.has("arrowleft")) yaw -= ((turnRateDegPerSec * Math.PI) / 180) * CH7_FRAMETIME;
+    if (keys.has("arrowright")) yaw += ((turnRateDegPerSec * Math.PI) / 180) * CH7_FRAMETIME;
+    if (pendingYawDelta) {
+      yaw += pendingYawDelta;
+      pendingYawDelta = 0;
+    }
 
-    const spaceNow = keys.has(" ");
-    const justJumped = spaceNow && !spaceHeld && grounded;
-    spaceHeld = spaceNow;
-
-    if (justJumped) {
+    const upmove = keys.has(" ") ? 400 : 0;
+    if (pmCheckJump(jumpState, upmove, grounded)) {
       velocity[2] = Math.max(velocity[2] + CH7_JUMP_VELOCITY, CH7_JUMP_VELOCITY);
       grounded = false;
     }
@@ -284,13 +366,20 @@ function mountCh7Playground(section) {
 
     position = [position[0] + velocity[0] * CH7_FRAMETIME, position[1] + velocity[1] * CH7_FRAMETIME, position[2] + velocity[2] * CH7_FRAMETIME];
 
-    if (position[2] <= 0) {
-      position[2] = 0;
+    // Physical contact (never tunnel through the ground/ramp) is separate
+    // from "grounded" for gameplay purposes (friction + ground accel) --
+    // real Quake keeps these separate too. This is where the SOF vs Q2
+    // ground-leave threshold actually does something: run up the ramp fast
+    // enough and you're still touching it, but already being treated as
+    // airborne.
+    const groundH = groundHeightAt(position[0]);
+    const touching = position[2] <= groundH;
+    if (touching) {
+      position[2] = groundH;
       if (velocity[2] < 0) velocity[2] = 0;
-      grounded = true;
-    } else {
-      grounded = false;
     }
+    const leaveThreshold = sofToggle.checked ? SOF_GROUND_LEAVE_VELOCITY : Q2_GROUND_LEAVE_VELOCITY;
+    grounded = touching && velocity[2] <= leaveThreshold;
 
     trailPts.push([...position]);
     if (trailPts.length > trailMaxPoints) trailPts.shift();

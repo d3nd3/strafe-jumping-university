@@ -31,7 +31,7 @@ function mountCh4AirVsGround(section) {
     </div>
 
     <div class="callout">
-      In the air, boost power is <b>1</b>. On the ground, it's <b>10</b> (line 648, not shown).
+      In the air, boost power (<span class="varname">accel</span>) is <b>1</b>. On the ground, it's <b>10</b> (line 648, not shown).
       Same keys, same code — ten times less push per instant, just because your feet left the
       floor.
     </div>

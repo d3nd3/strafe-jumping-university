@@ -130,7 +130,10 @@ function createDebugger({
     highlightLines(jsPane, m.js);
     descEl.innerHTML = describe ? describe(step) : `<strong>${escapeHtml(step.label)}</strong>`;
     const rows = Object.entries(step.locals || {})
-      .map(([k, v]) => `<div class="local-row"><span class="local-key">${friendlyLabel(k)}</span><span class="local-val">${fmtVal(v)}</span></div>`)
+      .map(
+        ([k, v]) =>
+          `<div class="local-row"><span class="local-key">${friendlyLabel(k)} <span class="varname">${escapeHtml(k)}</span></span><span class="local-val">${fmtVal(v)}</span></div>`
+      )
       .join("");
     localsEl.innerHTML = rows || "<em>nothing yet — press Step</em>";
   }

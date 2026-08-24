@@ -27,6 +27,36 @@ const pm_friction = 6;
 // here purely so Chapter 7's 3D playground can stop rolling forever once you
 // let go of the keys on the ground, the same way the real game does.
 // ---------------------------------------------------------------------------
+// PM_CatagorizePosition's ground-leave velocity check (pmove.c:704-707).
+// #define SOF is active in this file by default (line 23), so 100 is what
+// actually ships; 180 is what stock Quake 2 uses without that patch. Moving
+// upward faster than this, you're treated as airborne even while still
+// touching the ground -- which matters the instant you launch off a ramp:
+// a lower threshold hands control (and keeps friction) off to "airborne"
+// sooner, so less of a ramp launch's speed gets eaten by ground friction.
+const SOF_GROUND_LEAVE_VELOCITY = 100;
+const Q2_GROUND_LEAVE_VELOCITY = 180;
+
+// PM_CheckJump, reduced to its actual latch logic (pmove.c:826-871; the
+// PMF_TIME_LAND and water-jump branches are left out -- not modeled here).
+// jumpState is a small {held: boolean} the caller owns across ticks.
+// Faithfully reproduces real Quake 2/SoF's jump-buffering quirk: the latch
+// only clears when the key is *released* (not when you leave the ground),
+// so pressing jump while airborne and holding it through touchdown fires
+// the instant you land -- no re-press needed exactly on that frame. Land,
+// keep holding, and it won't jump again until you let go and press once
+// more (usually while still airborne, ready for the next landing).
+function pmCheckJump(jumpState, upmove, grounded) {
+  if (upmove < 10) {
+    jumpState.held = false;
+    return false;
+  }
+  if (jumpState.held) return false;
+  if (!grounded) return false;
+  jumpState.held = true;
+  return true;
+}
+
 function pmGroundFriction(velocity, frametime) {
   const speed = VectorLength(velocity);
   if (speed < 1) {

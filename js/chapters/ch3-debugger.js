@@ -1,11 +1,16 @@
+// Every plain-English term below is immediately followed by the exact
+// variable name it refers to in the code panel (amber, monospace) -- so
+// "target direction" and "wishdir" are always visibly the same thing,
+// without needing a hover or a separate legend to look up.
+const V = (name) => `<span class="varname">${name}</span>`;
 const DESCRIPTIONS = {
-  decl: "We know 3 things: which way you're trying to go, how fast you want to go, and how strong the boost is.",
-  currentspeed: "Check how much of your current motion is already pointed the way you're trying to go.",
-  addspeed: "Work out how much speed room is left before you'd hit your target speed.",
-  "early-return": "No room left — you're already going fast enough that way. Nothing changes.",
-  accelspeed: "Work out this step's boost: boost power × tick length × target speed.",
-  clamp: "Don't overshoot. If the boost is bigger than the room left, shrink it to fit.",
-  apply: "Add the boost — but <strong>only</strong> in the direction you're trying to go. Everything sideways to that is left completely alone.",
+  decl: `We know 3 things: which way you're trying to go (${V("wishdir")}), how fast you want to go (${V("wishspeed")}), and how strong the boost is (${V("accel")}).`,
+  currentspeed: `Check how much of your current motion (${V("velocity")}) is already pointed the way you're trying to go. That amount is ${V("currentspeed")}.`,
+  addspeed: `Work out how much speed room is left (${V("addspeed")}) before you'd hit your target speed.`,
+  "early-return": `No room left (${V("addspeed")} ≤ 0) — you're already going fast enough that way. Nothing changes.`,
+  accelspeed: `Work out this step's boost (${V("accelspeed")}): boost power × tick length × target speed.`,
+  clamp: `Don't overshoot. If the boost (${V("accelspeed")}) is bigger than the room left (${V("addspeed")}), shrink it to fit.`,
+  apply: `Add the boost — but <strong>only</strong> in the direction you're trying to go (${V("wishdir")}). Everything sideways to that is left completely alone.`,
 };
 
 function mountCh3Debugger(section) {
@@ -14,11 +19,12 @@ function mountCh3Debugger(section) {
     <h1>The one function that does all of this</h1>
     <p class="lede">Press <strong>Step</strong> and watch it run, one line at a time, in the real game code and a JS copy, side by side.</p>
 
+    <p class="muted" style="margin-bottom:4px">Plain words on the left, the real code's name on the right — same thing, always shown together:</p>
     <div class="term-strip">
-      <span class="term-chip"><b>target direction</b> = the way you're steering</span>
-      <span class="term-chip"><b>target speed</b> = how fast you're trying to go</span>
-      <span class="term-chip"><b>boost power</b> = how strong the push is (10 on ground, 1 in air)</span>
-      <span class="term-chip"><b>tick length</b> = time since the last update</span>
+      <span class="term-chip"><b>target direction</b> <span class="varname">wishdir</span> = the way you're steering</span>
+      <span class="term-chip"><b>target speed</b> <span class="varname">wishspeed</span> = how fast you're trying to go</span>
+      <span class="term-chip"><b>boost power</b> <span class="varname">accel</span> = how strong the push is (10 on ground, 1 in air)</span>
+      <span class="term-chip"><b>tick length</b> <span class="varname">frametime</span> = time since the last update</span>
     </div>
 
     <div class="panel">

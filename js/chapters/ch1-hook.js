@@ -12,6 +12,11 @@ function mountCh1Hook(section) {
       <div class="panel-row">
         <div class="panel-col">
           <canvas class="scene" id="hook-canvas"></canvas>
+          <p class="muted" style="font-size:13px;margin-top:8px">
+            <b>What you're looking at:</b> a bird's-eye view of one player. The dot is them; the
+            line is the path they just flew. This is real, running physics — not a decoration —
+            it's the same replay you'll be able to build yourself by Chapter&nbsp;5.
+          </p>
         </div>
         <div class="panel-col">
           <div class="hud">
@@ -20,8 +25,8 @@ function mountCh1Hook(section) {
           </div>
           <div class="mystery">
             <strong>The mystery:</strong> the 300 limit never gets raised anywhere. And yet the
-            number on the left keeps climbing past it. By the end, you'll know exactly why —
-            and exactly how to do it yourself.
+            number on the left keeps climbing past it, just by turning while flying. By the end,
+            you'll know exactly why — and exactly how to do it yourself.
           </div>
         </div>
       </div>
@@ -31,35 +36,51 @@ function mountCh1Hook(section) {
 
   const canvas = section.querySelector("#hook-canvas");
   const speedEl = section.querySelector("#hook-speed");
-  const scene = createScene(canvas, { originX: 0.5, originY: 0.55, scale: 0.55 });
+  const scene = createScene(canvas, { originX: 0.5, originY: 0.5, scale: 0.5 });
 
-  // A pre-baked, visually pleasing spiral: this is illustrative (it does not
-  // call physics.js) because its only job is to hook the reader with the
-  // *shape* of the phenomenon before Chapter 3 proves it line by line.
-  let t = 0;
-  const trail = [];
+  // Real physics, not a decoration: this is one bounded "jump" run through
+  // the exact same pmAirMoveSteps generator every later chapter uses, at a
+  // turning speed picked (in Chapter 5's own sweep) to climb cleanly. It
+  // loops: fly for ~0.7s, hold the final speed a moment, then reset.
+  const TICKS = 70;
+  const DT = 0.01;
+  const TURN_DEG_PER_SEC = 170;
+  const HOLD_FRAMES = 45;
+
+  let state, pos, trail, tickCount, holdCount;
+  function reset() {
+    state = { velocity: [300, 0, 0], yaw: 0 };
+    pos = [0, 0];
+    trail = [[0, 0]];
+    tickCount = 0;
+    holdCount = 0;
+  }
+  reset();
+
   function frame() {
-    t += 0.02;
-    const radius = 40 + t * 26;
-    const speed = 300 + Math.min(180, t * 55);
-    const x = Math.cos(t * 2.4) * radius;
-    const y = Math.sin(t * 2.4) * radius * 0.55;
-    trail.push([x, y]);
-    if (trail.length > 140) trail.shift();
-    if (t > 6.5) {
-      t = 0;
-      trail.length = 0;
+    if (tickCount < TICKS) {
+      state.yaw += ((TURN_DEG_PER_SEC * Math.PI) / 180) * DT;
+      const gen = pmAirMoveSteps(state, { forwardmove: 400, sidemove: 400 }, DT);
+      while (!gen.next().done) {}
+      pos = [pos[0] + state.velocity[0] * DT, pos[1] + state.velocity[1] * DT];
+      trail.push([...pos]);
+      tickCount++;
+    } else if (holdCount++ > HOLD_FRAMES) {
+      reset();
     }
 
+    const speed = VectorLength(state.velocity);
     scene.clear();
     scene.grid();
     for (let i = 1; i < trail.length; i++) {
+      const p0 = [trail[i - 1][0] * 0.35, trail[i - 1][1] * 0.35];
+      const p1 = [trail[i][0] * 0.35, trail[i][1] * 0.35];
       const alpha = i / trail.length;
-      scene.line(trail[i - 1], trail[i], { color: `rgba(125,255,176,${alpha * 0.8})`, dash: [], width: 2 });
+      scene.line(p0, p1, { color: `rgba(125,255,176,${alpha * 0.85})`, dash: [], width: 2.5 });
     }
-    if (trail.length) {
-      scene.point(trail[trail.length - 1], { color: "#eafff2", radius: 5 });
-    }
+    const last = trail[trail.length - 1];
+    scene.point([last[0] * 0.35, last[1] * 0.35], { color: "#eafff2", radius: 5 });
+
     speedEl.textContent = speed.toFixed(0);
     requestAnimationFrame(frame);
   }

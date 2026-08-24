@@ -70,8 +70,8 @@ const ACCELERATE_MAP = {
 // (amber, monospace) so nobody has to hover or look anything up.
 const VARNAME = (name) => `<span class="varname">${name}</span>`;
 const ACCELERATE_DESCRIPTIONS = {
-  decl: `We know 3 things: which way you're trying to go (${VARNAME("wishdir")}), how fast you want to go (${VARNAME("wishspeed")}), and how strong the boost is (${VARNAME("accel")}).`,
-  currentspeed: `Measure your <b>speed toward target</b> (${VARNAME("currentspeed")}): of all your current motion (${VARNAME("velocity")}), how much of it already points the way you're trying to go. Sideways motion doesn't count at all.`,
+  decl: `We know 3 things: which way you're trying to go (${VARNAME("wishdir")}), how fast you want to go (${VARNAME("wishspeed")}), and how strong the boost is (${VARNAME("accel")}). One thing worth knowing about ${VARNAME("wishdir")}: it's always exactly 1 unit long (a "unit vector") — it carries direction only, no speed. The code that calls this function normalizes it right before handing it over, so it's guaranteed to already be that length by the time we get here.`,
+  currentspeed: `Measure your <b>speed toward target</b> (${VARNAME("currentspeed")}): of all your current motion (${VARNAME("velocity")}), how much of it already points the way you're trying to go. Sideways motion doesn't count at all. Unlike ${VARNAME("wishdir")}, ${VARNAME("velocity")} is <em>not</em> a unit vector — its length is literally your current speed, so it can be 0, 300, or anything else depending on how fast you're actually moving.`,
   addspeed: `Work out how much speed room is left (${VARNAME("addspeed")}) before you'd hit your target speed.`,
   "early-return": `No room left (${VARNAME("addspeed")} ≤ 0) — you're already going fast enough that way. Nothing changes.`,
   accelspeed: `Work out this step's boost (${VARNAME("accelspeed")}): boost power × tick length × target speed.`,

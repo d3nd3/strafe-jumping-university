@@ -14,7 +14,19 @@ function mountCh3Debugger(section) {
       <span class="term-chip"><b>target speed</b> <span class="varname">wishspeed</span> = how fast you're trying to go</span>
       <span class="term-chip"><b>boost power</b> <span class="varname">accel</span> = how strong the push is (10 on ground, 1 in air)</span>
       <span class="term-chip"><b>tick length</b> <span class="varname">frametime</span> = time since the last update</span>
+      <span class="term-chip"><b>direction only</b> <span class="varname">wishdir</span> = always exactly 1 unit long (a "unit vector") — carries a direction, no speed</span>
+      <span class="term-chip"><b>your real speed</b> <span class="varname">velocity</span> = NOT a unit vector — its length literally <em>is</em> your current speed</span>
     </div>
+    <p class="muted" style="margin-top:2px">
+      Confirmed straight from id Software's own Quake 2 source (<span class="varname">qcommon/pmove.c</span>):
+      right before <span class="varname">PM_AirMove</span> calls this function, it runs
+      <span class="varname">wishspeed = VectorNormalize(wishdir)</span> — that line divides
+      <span class="varname">wishdir</span> by its own length, which forces its length to exactly 1
+      and hands the length it used to have over to <span class="varname">wishspeed</span> instead.
+      So every time this function runs, <span class="varname">wishdir</span> is guaranteed to be
+      a pure direction (length 1) and <span class="varname">velocity</span> is never touched that
+      way — its length is always your real, uncapped speed.
+    </p>
 
     <div class="panel">
       <div class="panel-row">

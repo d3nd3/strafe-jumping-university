@@ -13,7 +13,7 @@ let CH6_TRAIL_MAX = 220; // trail length in *ticks*, so its real-time duration s
 
 function mountCh6Simulator(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 7 · Try It Yourself</div>
+    <div class="chapter-kicker">Chapter 6 · Try It Yourself</div>
     <h1>Now fly it yourself</h1>
     <p class="lede">This is the exact same code from every earlier chapter, running live off your keyboard. No gravity or ground on purpose — just the pure steering trick.</p>
 
@@ -80,7 +80,7 @@ function mountCh6Simulator(section) {
       <button class="btn primary" id="sim-resume">▶ Resume flying</button>
     </div>
 
-    <a class="next-link" href="#ch7-playground">Continue → Chapter 8: the full picture in 3D</a>
+    <a class="next-link" href="#ch7-playground">Continue → Chapter 7: the full picture in 3D</a>
   `;
 
   const canvas = section.querySelector("#sim-canvas");
@@ -238,7 +238,7 @@ function mountCh6Simulator(section) {
     sctx.stroke();
   }
 
-  // Fixed-timestep accumulator -- see Chapter 8's identical comment. Calling
+  // Fixed-timestep accumulator -- see Chapter 7's identical comment. Calling
   // tick() once per requestAnimationFrame callback made simulated speed
   // depend on the viewer's monitor refresh rate (slow motion at 60Hz, ~44%
   // too fast at 144Hz); this runs tick() as many times as needed to catch up

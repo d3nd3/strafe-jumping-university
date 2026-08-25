@@ -4,7 +4,6 @@ const chapters = [
   { id: "ch3-debugger", title: "The Accelerate Debugger", mount: mountCh3Debugger },
   { id: "ch4-air-vs-ground", title: "Why Air Is Different", mount: mountCh4AirVsGround },
   { id: "ch5-angle-mystery", title: "The Angle Mystery", mount: mountCh5AngleMystery },
-  { id: "ch6-waggle", title: "Aim Off-Target", mount: mountCh6Waggle },
   { id: "ch6-simulator", title: "Live Simulator", mount: mountCh6Simulator },
   { id: "ch7-playground", title: "The Full Picture (3D)", mount: mountCh7Playground },
   { id: "ch8-sof-vs-q2", title: "SOF vs. Q2", mount: mountCh8SofVsQ2 },

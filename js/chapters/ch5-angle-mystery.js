@@ -1,30 +1,75 @@
 
 const CH5_FRAMETIME = 0.01; // 100 ticks/sec, matches a classic sv_fps 100 server
 
+// Real, confirmed SoF constants -- not tuned for this chapter. CH5_JUMP_VELOCITY
+// matches PM_CheckJump's actual retail value (Chapter 8's CH7_JUMP_VELOCITY: a
+// flat assignment, decompiled straight out of SoF.exe) and CH5_GRAVITY matches
+// Chapter 8's CH7_GRAVITY (typical Quake 2 sv_gravity default). Airtime is no
+// longer a slider you set by hand -- it falls out of these two numbers plus how
+// far below (or above) your takeoff point you land, exactly like a real jump.
+const CH5_JUMP_VELOCITY = 270;
+const CH5_GRAVITY = 800;
+// v0^2 / (2g): the highest a flat 270 u/s launch can ever climb. Landing any
+// higher than this is physically impossible for a single jump, so the slider
+// below stays safely under it.
+const CH5_APEX_HEIGHT = (CH5_JUMP_VELOCITY * CH5_JUMP_VELOCITY) / (2 * CH5_GRAVITY);
+
 // turnDegPerSec: how fast the view turns, in degrees per second.
-function runJump(turnDegPerSec, ticks) {
-  const state = { velocity: [300, 0, 0], yaw: 0 };
+// landingHeight: where the ground is, relative to the takeoff point (0 = flat
+// ground, negative = dropping off a ledge, positive = landing up on something).
+// Vertical motion (liftoff, gravity, landing) is entirely decoupled from the
+// horizontal air-strafe math below -- turning never changes how long you're
+// airborne, only how fast you're going when you land. That's real physics, not
+// a simplification: pmAirMoveSteps only ever touches velocity[0]/[1].
+function runJump(turnDegPerSec, landingHeight) {
+  const state = { velocity: [pm_maxspeed, 0, CH5_JUMP_VELOCITY], yaw: 0 };
   const path = [[0, 0]];
   let pos = [0, 0];
-  const speeds = [300];
-  for (let t = 0; t < ticks; t++) {
+  let height = 0;
+  const speeds = [pm_maxspeed];
+  let ticks = 0;
+  const MAX_TICKS = 600; // 6s safety cap -- real airtimes here top out around 1.4s
+  // landingHeight > 0 means the ground you land on is above your takeoff point --
+  // you hit it climbing, on the way up. Anything <= 0 means it's below (or level
+  // with) takeoff, so you hit it falling, after the apex. Same trajectory either
+  // way; only which crossing counts as "landed" changes.
+  const rising = landingHeight > 0;
+  for (; ticks < MAX_TICKS; ticks++) {
     state.yaw += (turnDegPerSec * CH5_FRAMETIME * Math.PI) / 180;
     const cmd = { forwardmove: 400, sidemove: 400 };
     const gen = pmAirMoveSteps(state, cmd, CH5_FRAMETIME);
     while (!gen.next().done) {}
+    state.velocity[2] -= CH5_GRAVITY * CH5_FRAMETIME; // gravity, same as Chapter 8's airborne branch
     pos = [pos[0] + state.velocity[0] * CH5_FRAMETIME, pos[1] + state.velocity[1] * CH5_FRAMETIME];
+    height += state.velocity[2] * CH5_FRAMETIME;
+    // PM_SnapPosition's real 16-bit velocity round-trip (physics.js) -- runs
+    // after this tick's movement already used the full-float velocity, same
+    // order as every other simulator on this site.
+    pmSnapVelocity(state.velocity);
     path.push(pos);
-    speeds.push(VectorLength(state.velocity));
+    speeds.push(Math.hypot(state.velocity[0], state.velocity[1]));
+    if (rising ? height >= landingHeight : height <= landingHeight) break;
   }
-  return { finalSpeed: speeds[speeds.length - 1], path, speeds };
+  return {
+    finalSpeed: speeds[speeds.length - 1],
+    airtime: (ticks + 1) * CH5_FRAMETIME,
+    path,
+    speeds,
+  };
 }
 
-function sweep(ticks, maxTurn = 1500, step = 15) {
+function sweep(landingHeight, maxTurn = 1500, step = 15) {
   const pts = [];
   for (let turn = 0; turn <= maxTurn; turn += step) {
-    pts.push([turn, runJump(turn, ticks).finalSpeed]);
+    pts.push([turn, runJump(turn, landingHeight).finalSpeed]);
   }
   return pts;
+}
+
+function describeLanding(h) {
+  if (h === 0) return "flat ground — a normal jump";
+  if (h < 0) return `dropping ${-h}u before you land — more air time`;
+  return `landing ${h}u up from where you jumped — less air time`;
 }
 
 function mountCh5AngleMystery(section) {
@@ -32,18 +77,26 @@ function mountCh5AngleMystery(section) {
     <div class="chapter-kicker">Chapter 5 · The Angle Mystery</div>
     <h1>There's a "just right" turning speed</h1>
     <p class="lede">
-      Hold forward + strafe and keep turning your view: the target direction rotates a little
-      each instant, so a little more speed keeps getting added, pointing a little differently
-      each time. That's air-strafing. Question: how fast should you turn?
+      Hold forward + strafe and keep turning your view during a real jump: the target direction
+      rotates a little each instant, so a little more speed keeps getting added, pointing a little
+      differently each time. That's air-strafing. Question: how fast should you turn?
     </p>
+
+    <div class="callout good">
+      <b>This is a real SOF jump, not an arbitrary flight:</b> liftoff at
+      <span class="varname">270 u/s</span> vertical — PM_CheckJump's actual, confirmed retail
+      value — with gravity at <span class="varname">800 u/s²</span> pulling you back down, the same
+      two numbers Chapter 8's 3D playground uses. Airtime isn't a knob you set anymore; it falls
+      straight out of that physics, driven by how far below or above your takeoff point you land.
+    </div>
 
     <div class="panel">
       <div class="panel-row">
         <div class="panel-col sticky-controls controls" style="flex:0 0 260px">
           <div class="control-row">
-            <label><span>① how long this jump lasts</span><span id="am-ticks-val">0.50s</span></label>
-            <input type="range" id="am-ticks" min="20" max="90" step="5" value="50" />
-            <p class="muted" style="font-size:12px;margin:2px 0 0">Real jumps last roughly this long before you land.</p>
+            <label><span>① where you land</span><span id="am-land-val">0u</span></label>
+            <input type="range" id="am-land" min="-400" max="40" step="10" value="0" />
+            <p class="muted" style="font-size:12px;margin:2px 0 0" id="am-land-desc">flat ground — a normal jump</p>
           </div>
           <div class="control-row" style="margin-top:14px">
             <label><span>② how fast you turn your view</span><span id="am-turn-val">200°/s</span></label>
@@ -52,7 +105,8 @@ function mountCh5AngleMystery(section) {
           </div>
           <div class="hud" style="flex-direction:column">
             <div class="hud-stat"><span class="k">SPEED WHEN YOU LAND</span><span class="v" id="am-final">—</span></div>
-            <div class="hud-stat warn"><span class="k">BEST POSSIBLE, THIS JUMP LENGTH</span><span class="v" id="am-best">—</span></div>
+            <div class="hud-stat"><span class="k">AIRBORNE FOR</span><span class="v" id="am-airtime">—</span></div>
+            <div class="hud-stat warn"><span class="k">BEST POSSIBLE, THIS LANDING HEIGHT</span><span class="v" id="am-best">—</span></div>
           </div>
           <div class="btn-row">
             <button class="btn primary" id="am-snap">Snap to the best turning speed</button>
@@ -64,7 +118,7 @@ function mountCh5AngleMystery(section) {
           <canvas class="scene" id="am-canvas"></canvas>
           <div class="legend"><span><span class="swatch" style="background:#7dffb0"></span>path during this one jump</span></div>
 
-          <h2 style="margin-top:28px">Same jump, every possible turning speed</h2>
+          <h2 style="margin-top:28px">Same landing height, every possible turning speed</h2>
           <p class="muted">
             The dot above only shows the turning speed you picked. This chart runs the
             <b>same jump over again from 0°/s all the way to 1500°/s</b>, and plots the landing
@@ -87,23 +141,25 @@ function mountCh5AngleMystery(section) {
     </div>
     <div class="callout good">
       <strong>Just right</strong> keeps a little room to speed up available for the <em>whole</em>
-      time you're in the air. Jump longer, and a gentler turn wins — that's why the graph's peak
-      moves when you drag slider ① (how long the jump lasts).
+      time you're in the air. Drop farther before landing (more air time), and a gentler turn
+      wins — that's why the graph's peak moves when you drag slider ① (where you land).
     </div>
 
-    <a class="next-link" href="#ch6-waggle">Continue → Chapter 6: why aiming off-target is faster</a>
+    <a class="next-link" href="#ch6-simulator">Continue → Chapter 6: fly it yourself</a>
   `;
 
   const canvas = section.querySelector("#am-canvas");
-  const scene = createScene(canvas, { originX: 0.5, originY: 0.5, scale: 0.9 });
+  const scene = createScene(canvas, { originX: 0.5, originY: 0.5, scale: 0.55 });
   const graphCanvas = section.querySelector("#am-graph");
   const gctx = graphCanvas.getContext("2d");
 
-  const ticksInput = section.querySelector("#am-ticks");
+  const landInput = section.querySelector("#am-land");
   const turnInput = section.querySelector("#am-turn");
-  const ticksVal = section.querySelector("#am-ticks-val");
+  const landVal = section.querySelector("#am-land-val");
+  const landDesc = section.querySelector("#am-land-desc");
   const turnVal = section.querySelector("#am-turn-val");
   const finalEl = section.querySelector("#am-final");
+  const airtimeEl = section.querySelector("#am-airtime");
   const bestEl = section.querySelector("#am-best");
   const snapBtn = section.querySelector("#am-snap");
 
@@ -119,8 +175,8 @@ function mountCh5AngleMystery(section) {
   }
 
   function recomputeCurve() {
-    const ticks = +ticksInput.value;
-    curve = sweep(ticks);
+    const landingHeight = +landInput.value;
+    curve = sweep(landingHeight);
     let best = curve[0];
     for (const p of curve) if (p[1] > best[1]) best = p;
     bestTurn = best[0];
@@ -242,8 +298,8 @@ function mountCh5AngleMystery(section) {
     gctx.textAlign = "left";
   }
 
-  function drawJump(turn, ticks) {
-    const { finalSpeed, path } = runJump(turn, ticks);
+  function drawJump(turn, landingHeight) {
+    const { finalSpeed, airtime, path } = runJump(turn, landingHeight);
 
     scene.clear();
     scene.grid();
@@ -258,20 +314,22 @@ function mountCh5AngleMystery(section) {
     scene.point([path[0][0] * 0.4, path[0][1] * 0.4], { color: "#fff", label: "start" });
     const last = path[path.length - 1];
     scene.point([last[0] * 0.4, last[1] * 0.4], { color: "#7dffb0", label: "landing" });
-    return finalSpeed;
+    return { finalSpeed, airtime };
   }
 
   function render() {
     const turn = +turnInput.value;
-    const ticks = +ticksInput.value;
+    const landingHeight = +landInput.value;
     turnVal.textContent = turn + "°/s";
-    ticksVal.textContent = `${(ticks / 100).toFixed(2)}s`;
-    const finalSpeed = drawJump(turn, ticks);
+    landVal.textContent = (landingHeight > 0 ? "+" : "") + landingHeight + "u";
+    landDesc.textContent = describeLanding(landingHeight);
+    const { finalSpeed, airtime } = drawJump(turn, landingHeight);
     finalEl.textContent = finalSpeed.toFixed(0);
+    airtimeEl.textContent = airtime.toFixed(2) + "s";
     drawGraph(turn, finalSpeed);
   }
 
-  ticksInput.addEventListener("input", () => {
+  landInput.addEventListener("input", () => {
     recomputeCurve();
     render();
   });

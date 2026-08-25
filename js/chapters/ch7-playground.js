@@ -6,7 +6,7 @@
 
 // Real Quake-engine clients call PM_AirMove once per rendered frame, using
 // that frame's real duration as frametime -- client frame rate is a genuine
-// movement input, not cosmetic (see Chapter 7's matching callout). This
+// movement input, not cosmetic (see Chapter 6's matching callout). This
 // starts at 142fps (~7ms), the rate competitive SoF play has historically
 // locked to; the dropdown below lets you compare other real client rates.
 // Independent of display refresh rate either way -- see the accumulator
@@ -54,7 +54,7 @@ function toThree(v, out) {
 
 function mountCh7Playground(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 8 · The Full Picture</div>
+    <div class="chapter-kicker">Chapter 7 · The Full Picture</div>
     <h1>Try it all, in 3D</h1>
     <p class="lede">Same target direction, same boost function, same turning trick — now with a
     ground, gravity, and a jump, watched from behind in 3D.</p>
@@ -153,7 +153,7 @@ function mountCh7Playground(section) {
       <button class="btn primary" id="pg-resume">▶ Resume</button>
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 9: recap</a>
+    <a class="next-link" href="#ch8-sof-vs-q2">Continue → Chapter 8: SOF vs. Q2</a>
   `;
 
   const wrap = section.querySelector("#pg-wrap");

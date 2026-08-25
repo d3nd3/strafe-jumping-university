@@ -1,4 +1,4 @@
-// Chapter 9 — a catalogue of every place pmove.c's own `#ifdef SOF` branches
+// Chapter 8 — a catalogue of every place pmove.c's own `#ifdef SOF` branches
 // (plus the sofree hooks.cpp reverse-engineering project's three physics
 // cvars: _sf_sv_q2_mode, _sf_sv_q2_style_jump, _sf_sv_q2_slide_fix) show SOF
 // and Quake II's movement code actually diverging, with the felt gameplay
@@ -146,8 +146,43 @@ const SOF_Q2_DIFFS = [
   },
 ];
 
+const BINARY_VS_SOURCE_DIFFS = [
+  {
+    num: 10,
+    tag: "jump velocity",
+    title: "Jumping while already rising doesn't stack",
+    cite: "pmove.c:890–898 · PM_CheckJump (no #ifdef SOF at all — retail binary diverges from the shared leaked source)",
+    summary:
+      "The leaked source's PM_CheckJump adds 270 to whatever vertical velocity you already have, then floors the result at 270 if that wasn't enough. Retail SoF.exe's compiled PM_CheckJump just assigns <code>velocity[2] = 270.0</code> outright — flat, no matter what you had going in.",
+    impact:
+      "In SOF, chaining a jump off a ramp launch or a mid-air boost never gets you higher than a flat jump — every jump resets vertical speed to exactly 270. The leaked branch would let a jump timed while still rising stack for a noticeably higher launch.",
+    corroboration:
+      "Confirmed by decompiling PM_CheckJump directly out of retail SoF.exe. Not an <code>#ifdef SOF</code> branch and not one of hooks.cpp's three cvars — the leaked source has neither here. The shipped binary just doesn't match its own leaked source.",
+    sofLabel: "SOF (compiled binary)",
+    sofCode: "velocity[2] = 270;   // flat, always",
+    q2Label: "Leaked source (both branches)",
+    q2Code: "velocity[2] += 270;\nif (velocity[2] < 270)\n  velocity[2] = 270;",
+  },
+  {
+    num: 11,
+    tag: "air accelerate",
+    title: "There's no separate, gentler air-acceleration formula",
+    cite: "pmove.c:694–697 · PM_AirMove (no #ifdef SOF at all — retail binary diverges from the shared leaked source)",
+    summary:
+      "The leaked source's airborne branch checks a cvar, <span class=\"varname\">pm_airaccelerate</span>, and when it's set, calls a whole separate function — <span class=\"varname\">PM_AirAccelerate</span> — that caps the wishspeed used for the addspeed comparison at 30 u/s, a gentler, more skill-rewarding curve than a flat accelerate call. Retail SoF.exe's compiled PM_AirMove has no such branch at all: one accelerate call, always, with accel hardcoded to a flat 1.",
+    impact:
+      "This one doesn't actually change SOF's felt behavior versus a default Q2 server — <span class=\"varname\">pm_airaccelerate</span> defaults to off in the leaked source too, so PM_AirAccelerate never runs on a stock Q2 server either. What's notable: SOF's compiled binary couldn't turn it on even if a server tried. A Q2 server can cvar-flip it live; SOF's binary has nothing there to flip.",
+    corroboration:
+      "Confirmed by decompiling PM_AirMove out of both SoF.exe and the Linux sof-bin ELF — no 30.0 constant, no second accelerate-shaped function, no runtime branch on any accel cvar anywhere in the function.",
+    sofLabel: "SOF (compiled binary)",
+    sofCode: "PM_Accelerate(wishdir, wishspeed, 1);\n// always — no alternate path compiled in",
+    q2Label: "Leaked source (both branches)",
+    q2Code: "if (pm_airaccelerate)\n  PM_AirAccelerate(wishdir, wishspeed, accel);\nelse\n  PM_Accelerate(wishdir, wishspeed, 1);",
+  },
+];
+
 const Q2_DRIFT_DIFF = {
-  num: 10,
+  num: 12,
   tag: "ramp threshold",
   title: "Ramp launches let go of the ground sooner",
   cite: "pmove.c:731–735 · PM_CatagorizePosition",
@@ -186,7 +221,7 @@ function diffCard(d) {
 
 function mountCh8SofVsQ2(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 9 · SOF vs. Q2</div>
+    <div class="chapter-kicker">Chapter 8 · SOF vs. Q2</div>
     <h1>Every verified difference between SOF and Quake II's movement code</h1>
     <p class="lede">
       SOF's engine is a licensed fork of Quake II. Its leaked <code>pmove.c</code> still carries
@@ -196,11 +231,22 @@ function mountCh8SofVsQ2(section) {
       (<code>_sf_sv_q2_mode</code>, <code>_sf_sv_q2_style_jump</code>,
       <code>_sf_sv_q2_slide_fix</code>) you can toggle to switch a live SOF server back to Q2
       behavior. Every item below is confirmed by at least one of: the source's own branch, a
-      hooks.cpp cvar, or disassembling the retail binaries directly.
+      hooks.cpp cvar, or disassembling the retail binaries directly — and that last category
+      catches a couple of real differences the <code>#ifdef</code> branches don't mark at all,
+      because the leaked source treats that code as identical for both engines and only the
+      compiled binary disagrees with it.
     </p>
 
     <h2>Real SOF-only behavior</h2>
     ${SOF_Q2_DIFFS.map(diffCard).join("")}
+
+    <h2>Not marked by any <code>#ifdef</code> — the shipped binary just doesn't match its own leaked source</h2>
+    <p class="muted">
+      These two aren't <code>#ifdef SOF</code> branches or hooks.cpp cvars — the leaked source
+      has completely identical code here for both engines. The only evidence is that retail
+      SoF.exe's compiled binary doesn't do what that shared source says.
+    </p>
+    ${BINARY_VS_SOURCE_DIFFS.map(diffCard).join("")}
 
     <h2>Not really a SOF change — just an older Q2</h2>
     <p class="muted">
@@ -211,12 +257,16 @@ function mountCh8SofVsQ2(section) {
 
     <div class="callout good">
       Net effect: SOF preserves real fall speed through a landing (so <span class="varname">PMF_TIME_LAND</span>
-      actually fires), scrubs speed on wall contact, ignores pitch when computing wishspeed, and
-      pops airborne off ramps sooner than a modern Q2 build would. None of that touches the core
-      accelerate/wishdir math the rest of this site walks through — it's all in the edges: landing,
-      walls, stairs, and slopes.
+      actually fires), scrubs speed on wall contact, ignores pitch when computing wishspeed, pops
+      airborne off ramps sooner than a modern Q2 build would, and flattens every jump to exactly
+      270 u/s instead of letting one stack on top of existing upward speed. None of that touches
+      the core accelerate/wishdir math the rest of this site walks through — it's all in the
+      edges: landing, walls, stairs, slopes, and jump timing. The one piece of Q2's movement code
+      SOF's binary is missing outright — <span class="varname">PM_AirAccelerate</span>'s
+      30-unit-capped air formula — wouldn't have changed anything anyway, since it ships off by
+      default in Q2 too.
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 10: recap</a>
+    <a class="next-link" href="#ch7-recap">Continue → Chapter 9: recap</a>
   `;
 }

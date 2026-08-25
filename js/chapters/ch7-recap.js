@@ -1,6 +1,6 @@
 function mountCh7Recap(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 10 · Recap</div>
+    <div class="chapter-kicker">Chapter 9 · Recap</div>
     <h1>What you just learned</h1>
 
     <p class="lede">Strafe-jumping isn't a bug or "just skill." It's a direct result of a few
@@ -31,7 +31,7 @@ function mountCh7Recap(section) {
     </dl>
 
     <div class="callout good" style="margin-top:30px">
-      Go back to Chapter 8 and try to beat your own top speed in 3D.
+      Go back to Chapter 7 and try to beat your own top speed in 3D.
     </div>
 
     <a class="next-link" href="#ch1-hook">↺ Back to the start</a>

@@ -123,6 +123,16 @@ function pmClipVelocity(inVel, normal, overbounce) {
 // default -- see PM_AirMove below). This function nudges pml.velocity
 // towards that wish, but only by as much as accel/frametime allow, and only
 // along the wishdir axis.
+//
+// One thing this leaves out on purpose: decompiling *both* shipped retail
+// binaries (SoF.exe and the Linux sof-bin ELF) shows accelspeed there is
+// actually `accel * knockbackFriction * frametime * wishspeed` -- an extra
+// 0..1 factor, 1.0 normally, pulled toward 0 for a moment right after the
+// player takes damage/knockback. It's real and it's on every accelerate call
+// in the retail game (ground, air, ladder, water, fly), not something the
+// leaked pmove.c source even has a field for. This app never simulates
+// taking damage, so that factor is always implicitly 1.0 here -- a genuine
+// SOF mechanic, just not one this course has any use for modeling.
 // ---------------------------------------------------------------------------
 function* pmAccelerateSteps(velocity, wishdir, wishspeed, accel, frametime) {
   // int i; float addspeed, accelspeed, currentspeed;

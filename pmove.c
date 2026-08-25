@@ -43,6 +43,20 @@ typedef struct
 
 	vec3_t		previous_origin;
 	qboolean	ladder;
+
+	// MISSING FROM THIS LEAKED SOURCE, but present and load-bearing in both
+	// shipped retail binaries (confirmed independently in SoF.exe via a
+	// standalone global "knockbackfriction" computed once per Pmove() from
+	// pm->s + 0xFC, and in the Linux sof-bin ELF as this exact extra float
+	// field baked directly into pml_t, one slot after `ladder`): a 0..1
+	// "control loss" scalar, 1.0 normally and pulled toward 0 for a moment
+	// after taking damage/knockback. Every accelerate call in retail SoF --
+	// PM_Accelerate() below, PM_WaterMove, PM_FlyMove, and the inlined
+	// ground/air/ladder accel in PM_AirMove -- multiplies accelspeed by it
+	// (see PM_Accelerate's accelspeed line). It's a genuine SOF-only
+	// mechanic Q2 never had. Not modeled by this project: nothing here
+	// simulates taking damage, so it's implicitly always 1.0 (a no-op) for
+	// every scenario this app teaches.
 } pml_t;
 
 pmove_t		*pm;
@@ -414,6 +428,10 @@ void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
 	if (addspeed <= 0)
 		return;
 	accelspeed = accel*pml.frametime*wishspeed;
+	// disassembly of both retail binaries shows an extra factor here:
+	// accelspeed = accel * pml.knockback_friction * pml.frametime * wishspeed;
+	// (see the pml_t comment above). Omitted below since it's always 1.0
+	// with no damage system in play.
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
 	
@@ -614,7 +632,17 @@ void PM_AirMove (void)
 //
 // clamp to server defined max speed
 //
+#ifdef SOF
+	// confirmed by disassembling PM_AirMove out of the retail SoF.exe:
+	// the compiled check is (PMF_DUCKED && PMF_ON_GROUND), not PMF_DUCKED
+	// alone. Ducking mid-air -- or still carrying the DUCKED flag for the
+	// one tick right after leaving the ground -- does NOT cap you to
+	// pm_duckspeed in real SoF. The leaked source below (SOF undefined)
+	// only tests PMF_DUCKED.
+	maxspeed = ((pm->s.pm_flags & PMF_DUCKED) && (pm->s.pm_flags & PMF_ON_GROUND)) ? pm_duckspeed : pm_maxspeed;
+#else
 	maxspeed = (pm->s.pm_flags & PMF_DUCKED) ? pm_duckspeed : pm_maxspeed;
+#endif
 
 	if (wishspeed > maxspeed)
 	{

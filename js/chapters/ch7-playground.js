@@ -581,13 +581,25 @@ function mountCh7Playground(section) {
     const touching = position[2] <= groundH;
     if (touching) {
       position[2] = groundH;
-      // hooks.cpp's special case: "if (_sf_sv_q2_style_jump->value ||
-      // _sf_sv_q2_mode->value) pml_velocity[2] = down_v[2];" -- Quake 2
-      // leaves your vertical speed exactly as it was the instant before you
-      // touched down, instead of snapping it to 0 like SOF does. It's a
-      // one-frame difference: the very next tick zeroes it either way via
-      // the "if (grounded) velocity[2] = 0" line below, once `grounded`
-      // catches up. Only visible by freezing the exact landing frame.
+      // PM_CatagorizePosition's own `#ifdef SOF` dirty-fix (pmove.c:778-781):
+      // "if (trace.fraction < 1.0 && trace.ent && pml.velocity[2] < 0)
+      // pml.velocity[2] = 0;" -- confirmed present, unconditionally, in both
+      // retail binaries (SoF.exe and the Linux sof-bin ELF). Quake 2 has no
+      // such line at all, so it leaves your vertical speed exactly as it was
+      // the instant before you touched down. It's a one-frame difference:
+      // the very next tick zeroes it either way via the "if (grounded)
+      // velocity[2] = 0" line below, once `grounded` catches up. Only
+      // visible by freezing the exact landing frame.
+      //
+      // NOT the same thing as hooks.cpp's "if (_sf_sv_q2_style_jump->value
+      // || _sf_sv_q2_mode->value) pml_velocity[2] = down_v[2];" -- that's a
+      // different line entirely, PM_StepSlideMove's own `#ifndef SOF`
+      // special case (pmove.c:333-335), part of the STEPSIZE stair-stepping
+      // algorithm (try stepping up 18 units, then push back down). This app
+      // has no stairs anywhere, and the wall collision below only ports
+      // PM_StepSlideMove_'s single-bump wall-clip -- never the outer
+      // PM_StepSlideMove that owns that stepping logic -- so that line has
+      // no equivalent here to implement.
       if (sofToggle.checked && velocity[2] < 0) velocity[2] = 0;
     }
     const leaveThreshold = sofToggle.checked ? SOF_GROUND_LEAVE_VELOCITY : Q2_GROUND_LEAVE_VELOCITY;

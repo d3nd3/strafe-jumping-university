@@ -1,6 +1,6 @@
 function mountCh7Recap(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 9 · Recap</div>
+    <div class="chapter-kicker">Chapter 10 · Recap</div>
     <h1>What you just learned</h1>
 
     <p class="lede">Strafe-jumping isn't a bug or "just skill." It's a direct result of a few

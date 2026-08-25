@@ -7,6 +7,7 @@ const chapters = [
   { id: "ch6-waggle", title: "Aim Off-Target", mount: mountCh6Waggle },
   { id: "ch6-simulator", title: "Live Simulator", mount: mountCh6Simulator },
   { id: "ch7-playground", title: "The Full Picture (3D)", mount: mountCh7Playground },
+  { id: "ch8-sof-vs-q2", title: "SOF vs. Q2", mount: mountCh8SofVsQ2 },
   { id: "ch7-recap", title: "Recap & Glossary", mount: mountCh7Recap },
 ];
 

@@ -6,8 +6,12 @@
 //     ground specifically (landingHeight = 0), reusing that chapter's own
 //     runJump/sweep functions directly (they're globals, same as every
 //     other chapter reuses CH5_JUMP_VELOCITY/CH5_GRAVITY).
-//   - Chapter 11's finding that a flat landing ALWAYS trips the 18-tick
-//     lockout -- there is no way to avoid paying it once per hop.
+//   - Chapter 11's finding that a flat landing ALWAYS trips the landing
+//     lockout -- there is no way to avoid paying it once per hop. Note the
+//     lockout is pm_time = 18 in units of 8ms, not 18 ticks; at the 100 fps
+//     this course simulates that works out to 18 frames anyway, which is why
+//     the tick counts below are still the right number to feed groundTurn/
+//     airTurn. chainLockoutMs (core/cmdchain.js) does the real arithmetic.
 //   - Chapter 12's corrected wishspeed dead-zone: PM_Accelerate's ground
 //     branch (accel=10) can reorient velocity far faster than the air
 //     branch (accel=1) can, which is verified fresh below rather than
@@ -26,8 +30,12 @@ function mountChZigzag(section) {
   // Flat landing velocity + lockout, straight from Chapter 11's own
   // functions (landingVelocity, lockoutTicks) -- not re-derived either.
   const flatLandV = landingVelocity(0);
-  const flatLockTicks = lockoutTicks(flatLandV);
-  const lockSeconds = flatLockTicks * CH_FRICTION_FRAMETIME;
+  const flatLockPmTime = lockoutTicks(flatLandV);
+  const SIM_FRAME_MS = CH_FRICTION_FRAMETIME * 1000;
+  const lockSeconds = chainLockoutMs(flatLockPmTime, SIM_FRAME_MS) / 1000;
+  // How many simulated ticks that lockout actually spans at this framerate --
+  // what groundTurn/airTurn below need, and only equal to pm_time at 100 fps.
+  const flatLockTicks = Math.round(lockSeconds / CH_FRICTION_FRAMETIME);
   const cycleSeconds = flatRun.airtime + lockSeconds;
 
   // Ground (accel=10, with friction) vs air (accel=1) reorientation over
@@ -112,8 +120,9 @@ function mountChZigzag(section) {
     <h2>③ The landing lockout isn't dead time -- use it to re-aim</h2>
     <p class="muted">
       Chapter 11 already showed a flat landing (${flatLandV.toFixed(0)} u/s vertical) always trips
-      <span class="varname">PMF_TIME_LAND</span>: <b>${flatLockTicks} ticks</b>
-      (${lockSeconds.toFixed(2)}s) where <span class="varname">PM_CheckJump</span> refuses to fire,
+      <span class="varname">PMF_TIME_LAND</span>: <b>pm_time ${flatLockPmTime}</b>, which at the
+      100 fps this course simulates is ${flatLockTicks} ticks
+      (${lockSeconds.toFixed(3)}s) where <span class="varname">PM_CheckJump</span> refuses to fire,
       no way around it on flat ground. But you're still standing on the ground for those ticks, and
       ground accel is <b>10×</b> air accel (Chapter 5). Re-aiming your view right as you land, so
       those ${flatLockTicks} locked-out ticks are spent turning on the ground instead of standing

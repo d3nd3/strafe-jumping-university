@@ -242,10 +242,10 @@ function mountCh6Simulator(section) {
 
     let fmove = 0,
       smove = 0;
-    if (keys.has("w")) fmove += 400;
-    if (keys.has("s")) fmove -= 400;
-    if (keys.has("d")) smove += 400;
-    if (keys.has("a")) smove -= 400;
+    if (keys.has("w")) fmove += CMD_MAX_FORWARD;
+    if (keys.has("s")) fmove -= CMD_MAX_FORWARD;
+    if (keys.has("d")) smove += CMD_MAX_SIDE;
+    if (keys.has("a")) smove -= CMD_MAX_SIDE;
 
     const before = [...state.velocity];
     const cmd = { forwardmove: fmove, sidemove: smove };

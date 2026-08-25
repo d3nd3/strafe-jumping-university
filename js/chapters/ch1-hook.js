@@ -2,20 +2,24 @@
 function mountCh1Hook(section) {
   section.innerHTML = `
     <div class="chapter-kicker">Chapter 1 · The Hook</div>
-    <h1>Top running speed is 300. So how is he going 480?</h1>
+    <h1>Top running speed is 300. So how is he going 390?</h1>
     <p class="lede">
-      In Quake&nbsp;2, running on the ground never goes faster than 300 units per second. That
-      limit is real — it's checked every instant. Yet good players fly through the air noticeably
-      faster than that. Not a cheat. A trick hidden in a few lines of 1997 code.
+      Running on the ground never goes faster than 300 units per second. That limit is real — it's
+      checked every instant, and nothing in this course ever raises it. Yet a <em>single</em> jump,
+      flown properly, lands at about 390. Chain jumps together and it keeps climbing from there.
+      Not a cheat. A trick hidden in a few lines of 1997 code.
     </p>
     <div class="panel">
       <div class="panel-row">
         <div class="panel-col">
           <canvas class="scene" id="hook-canvas"></canvas>
           <p class="muted" style="font-size:13px;margin-top:8px">
-            <b>What you're looking at:</b> a bird's-eye view of one player. The dot is them; the
-            line is the path they just flew. This is real, running physics — not a decoration —
-            it's the same replay you'll be able to build yourself by Chapter&nbsp;8.
+            <b>What you're looking at:</b> a bird's-eye view of one player, flying <em>one</em>
+            jump — 0.7 seconds of real air time, then a reset. The dot is them; the line is the
+            path they just flew. This is real, running physics, not a decoration: the same
+            <span class="varname">PM_AirMove</span> code every later chapter steps through, fed the
+            largest movement command the game can actually produce (400 forward, 320 sideways —
+            Chapter 12 explains why those two numbers differ).
           </p>
         </div>
         <div class="panel-col">
@@ -25,8 +29,8 @@ function mountCh1Hook(section) {
           </div>
           <div class="mystery">
             <strong>The mystery:</strong> the 300 limit never gets raised anywhere. And yet the
-            number on the left keeps climbing past it, just by turning while flying. By the end,
-            you'll know exactly why — and exactly how to do it yourself.
+            number on the left keeps climbing past it, in one jump, just by turning while flying.
+            By the end you'll know exactly why — and exactly how to do it yourself.
           </div>
         </div>
       </div>
@@ -60,7 +64,7 @@ function mountCh1Hook(section) {
   function frame() {
     if (tickCount < TICKS) {
       state.yaw += ((TURN_DEG_PER_SEC * Math.PI) / 180) * DT;
-      const gen = pmAirMoveSteps(state, { forwardmove: 400, sidemove: 400 }, DT);
+      const gen = pmAirMoveSteps(state, { forwardmove: CMD_MAX_FORWARD, sidemove: CMD_MAX_SIDE }, DT);
       while (!gen.next().done) {}
       pos = [pos[0] + state.velocity[0] * DT, pos[1] + state.velocity[1] * DT];
       trail.push([...pos]);

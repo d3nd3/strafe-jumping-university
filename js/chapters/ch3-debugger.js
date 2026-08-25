@@ -58,8 +58,8 @@ function mountCh3Debugger(section) {
               <input type="range" id="c-fmove" min="-400" max="400" step="10" value="400" />
             </div>
             <div class="control-row">
-              <label><span>strafe key, A/D</span><span id="c-smove-val">0</span></label>
-              <input type="range" id="c-smove" min="-400" max="400" step="10" value="0" />
+              <label><span>strafe key, A/D <span class="muted" style="font-size:11px">(max 320, not 400)</span></span><span id="c-smove-val">0</span></label>
+              <input type="range" id="c-smove" min="-320" max="320" step="10" value="0" />
             </div>
             <div class="control-row">
               <label><span>tick length (ms)</span><span id="c-ft-val">10</span></label>

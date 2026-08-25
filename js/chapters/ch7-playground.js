@@ -481,7 +481,7 @@ function mountCh7Playground(section) {
       landTime = msec8 >= landTime ? 0 : landTime - msec8;
     }
 
-    const upmove = keys.has(" ") ? 400 : 0;
+    const upmove = keys.has(" ") ? CMD_MAX_UP : 0;
     if (pmCheckJump(jumpState, upmove, grounded, landTime > 0)) {
       velocity[2] = CH7_JUMP_VELOCITY;
       grounded = false;
@@ -499,10 +499,10 @@ function mountCh7Playground(section) {
 
     let fmove = 0,
       smove = 0;
-    if (keys.has("w")) fmove += 400;
-    if (keys.has("s")) fmove -= 400;
-    if (keys.has("d")) smove += 400;
-    if (keys.has("a")) smove -= 400;
+    if (keys.has("w")) fmove += CMD_MAX_FORWARD;
+    if (keys.has("s")) fmove -= CMD_MAX_FORWARD;
+    if (keys.has("d")) smove += CMD_MAX_SIDE;
+    if (keys.has("a")) smove -= CMD_MAX_SIDE;
 
     const { forward, right } = AngleVectorsYaw(yaw, [0, 0, 0], [0, 0, 0]);
     // toThree() swaps two axes to go from physics' Z-up to three.js's Y-up --

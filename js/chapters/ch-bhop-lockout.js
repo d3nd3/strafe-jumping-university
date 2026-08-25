@@ -3,9 +3,18 @@
 // game in this genre. Chapter 10 (SOF vs. Q2) already established PMF_TIME_LAND
 // as a real, SOF-specific landing lockout (pmove.c:788-800, corroborated by
 // hooks.cpp's _sf_sv_q2_style_jump). This chapter is the payoff: it runs the
-// exact real thresholds (-200/-400 u/s, 18/25 ticks) against Chapter 7's own
+// exact real thresholds (-200/-400 u/s, pm_time 18/25) against Chapter 7's own
 // jump-arc constants (CH5_JUMP_VELOCITY, CH5_GRAVITY) to show precisely which
 // landings dodge the lockout and which never can.
+//
+// CORRECTION vs. an earlier version of this chapter: pm_time is NOT a tick
+// count. It is a byte counted down in units of 8 ms -- Pmove_REAL does
+// `msec = cmd.msec >> 3; if (!msec) msec = 1; pm_time -= msec` (verified in
+// retail SoF.exe at 0x200549fd, matching pmove.c:1558-1572). So 18 means 144 ms
+// nominally, not 18 ticks. The old text said "0.18s", which happens to be right
+// at exactly 100 fps and wrong everywhere else -- and it hid the interesting
+// part, which is that the `if (!msec) msec = 1` floor makes the lockout SHORTER
+// at high framerates. See chainLockoutMs in core/cmdchain.js.
 
 // Vertical velocity the instant you land on ground `h` units above (or below)
 // your takeoff point, for a flat CH5_JUMP_VELOCITY launch. Same energy-
@@ -38,7 +47,25 @@ function mountChBhopLockout(section) {
   const stairDisc = CH5_JUMP_VELOCITY * CH5_JUMP_VELOCITY - 2 * CH5_GRAVITY * stairHeight;
   const stairHopTime = (CH5_JUMP_VELOCITY - Math.sqrt(stairDisc)) / CH5_GRAVITY;
   const flatAirtime = (2 * CH5_JUMP_VELOCITY) / CH5_GRAVITY;
-  const flatCycleTime = flatAirtime + 18 * CH_FRICTION_FRAMETIME;
+  // Lockout at the site-wide 100 fps / 10 ms frame the rest of the course
+  // simulates. chainLockoutMs does the real >>3 arithmetic (core/cmdchain.js).
+  const SIM_FRAME_MS = CH_FRICTION_FRAMETIME * 1000;
+  const flatLockMs = chainLockoutMs(18, SIM_FRAME_MS);
+  const flatCycleTime = flatAirtime + flatLockMs / 1000;
+  const LOCKOUT_FPS_ROWS = [500, 250, 125, 100, 62.5, 50, 30]
+    .map((fps) => {
+      const ms = 1000 / fps;
+      const step = Math.max(1, Math.floor(ms) >> 3);
+      return `<tr>
+        <td class="l">${fps} fps</td>
+        <td>${ms.toFixed(1)} ms</td>
+        <td>${step}</td>
+        <td>${Math.ceil(18 / step)}</td>
+        <td class="hot">${chainLockoutMs(18, ms).toFixed(0)} ms</td>
+        <td>${chainLockoutMs(25, ms).toFixed(0)} ms</td>
+      </tr>`;
+    })
+    .join("");
 
   section.innerHTML = `
     <div class="chapter-kicker">Chapter 11 · Bunny-Hopping</div>
@@ -53,9 +80,50 @@ function mountChBhopLockout(section) {
     <div class="callout">
       <span class="varname">PM_CatagorizePosition</span> (pmove.c:792-799): the instant you touch
       ground, if your vertical velocity is below <b>&minus;200 u/s</b>, <span class="varname">PMF_TIME_LAND</span>
-      is set and <span class="varname">PM_CheckJump</span> refuses to fire for <b>18 ticks</b> (25 if
-      you were below &minus;400). No <code>#ifdef SOF</code> here at all -- both engines run this exact
-      check. What differs is whether your velocity is ever fast enough to trip it (Chapter 10, item 1).
+      is set and <span class="varname">PM_CheckJump</span> refuses to fire until a countdown reaches
+      zero -- it starts at <b>18</b>, or <b>25</b> if you were below &minus;400. No
+      <code>#ifdef SOF</code> here at all: both engines run this exact check. What differs is whether
+      your velocity is ever fast enough to trip it (Chapter 10, item 1).
+    </div>
+
+    <div class="mystery">
+      <b>Those aren't ticks.</b> The countdown is a single byte measured in units of <b>8 ms</b>,
+      and every frame it drops by your frame time in milliseconds divided by 8 -- but never by
+      less than 1:
+      <div class="formula" style="margin:10px 0 8px">
+        msec = cmd.msec &gt;&gt; 3;<br />
+        if (!msec) msec = 1;<br />
+        if (msec &gt;= pm_time) { clear the flag; pm_time = 0; }<br />
+        else pm_time -= msec;
+      </div>
+      So 18 is <b>144 ms</b> nominally, not 18 ticks. And that <span class="varname">msec = 1</span>
+      floor has teeth: once your frame time drops under 8 ms — anything above <b>125 fps</b> — the
+      counter can only fall by 1 per frame, so the lockout becomes a fixed <em>18 frames</em> and
+      gets shorter in real time the faster you run.
+    </div>
+
+    <div class="panel">
+      <table class="cvar-table mono">
+        <thead>
+          <tr>
+            <td class="l">your framerate</td>
+            <td>frame time</td>
+            <td>countdown drops by</td>
+            <td>frames to clear 18</td>
+            <td>flat-landing lockout</td>
+            <td>hard landing (25)</td>
+          </tr>
+        </thead>
+        <tbody>${LOCKOUT_FPS_ROWS}</tbody>
+      </table>
+    </div>
+    <div class="callout good">
+      Read the last two columns. Between 50 and 125 fps the lockout wobbles around 144–180 ms and
+      framerate buys you nothing. Above 125 fps it falls off a cliff: at 250 fps a flat landing
+      costs <b>${chainLockoutMs(18, 4).toFixed(0)} ms</b> instead of
+      <b>${chainLockoutMs(18, 8).toFixed(0)} ms</b>. Same code, same landing — the counter simply
+      cannot express a step smaller than one, so it spends one per frame however short the frame
+      is. It is the only place in this entire course where raw framerate changes the physics.
     </div>
 
     <h2>Where you land decides everything</h2>
@@ -75,12 +143,12 @@ function mountChBhopLockout(section) {
           </div>
           <div class="hud" style="flex-direction:column">
             <div class="hud-stat"><span class="k">VERTICAL SPEED AT LANDING</span><span class="v" id="bh-vel">—</span></div>
-            <div class="hud-stat warn"><span class="k">NEXT JUMP LOCKED FOR</span><span class="v" id="bh-lock">—</span></div>
+            <div class="hud-stat warn"><span class="k">NEXT JUMP LOCKED FOR</span><span class="v" id="bh-lock" style="font-size:15px">—</span></div>
           </div>
         </div>
         <div class="panel-col" style="flex:1 1 420px">
           <canvas class="scene" id="bh-graph" style="height:300px"></canvas>
-          <p class="muted" style="margin:6px 0 0">Lockout (in ticks) for every landing height from a full drop up to the apex.</p>
+          <p class="muted" style="margin:6px 0 0">The <span class="varname">pm_time</span> value set on landing, for every landing height from a full drop up to the apex. Multiply by 8 ms for the nominal wait, or read it off the framerate table above.</p>
         </div>
       </div>
     </div>
@@ -102,7 +170,8 @@ function mountChBhopLockout(section) {
       <div class="panel-row" style="gap:24px;flex-wrap:wrap">
         <div class="panel-col" style="flex:1 1 220px">
           <div style="font-family:var(--mono);font-size:12px;color:var(--text-dim)">FLAT-GROUND HOPPING</div>
-          <div style="font-size:22px;margin:4px 0"><span class="varname">${flatAirtime.toFixed(3)}s</span> flight + <span class="varname">0.18s</span> locked out</div>
+          <div style="font-size:22px;margin:4px 0"><span class="varname">${flatAirtime.toFixed(3)}s</span> flight + <span class="varname">${(flatLockMs / 1000).toFixed(3)}s</span> locked out</div>
+          <div class="muted" style="font-size:12px">lockout shown at 100 fps — see the table above</div>
           <div class="muted">= ${flatCycleTime.toFixed(3)}s per hop → ${(5 * flatCycleTime).toFixed(2)}s for 5 hops</div>
         </div>
         <div class="panel-col" style="flex:1 1 220px">
@@ -113,7 +182,7 @@ function mountChBhopLockout(section) {
       </div>
     </div>
     <div class="callout">
-      Roughly <b>${(flatCycleTime / stairHopTime).toFixed(1)}×</b> faster hop cadence, purely from
+      Roughly <b>${(flatCycleTime / stairHopTime).toFixed(1)}×</b> faster hop cadence (at 100 fps), purely from
       landing on rising ground instead of flat ground. This is why SOF (and real Quake/Half-Life
       level design generally) rewards stairs, ramps, and ledges for hop-chaining, while flat-ground
       bunny-hopping the way Half-Life or CS players know it barely exists here at all -- it's not a
@@ -220,7 +289,7 @@ function mountChBhopLockout(section) {
     gctx.save();
     gctx.translate(12, (padT + h - padB) / 2);
     gctx.rotate(-Math.PI / 2);
-    gctx.fillText("lockout ticks ↑", 0, 0);
+    gctx.fillText("pm_time set on landing ↑", 0, 0);
     gctx.restore();
     gctx.textAlign = "left";
   }
@@ -238,7 +307,12 @@ function mountChBhopLockout(section) {
     const v = landingVelocity(hv);
     const ticks = lockoutTicks(v);
     velEl.textContent = v === null ? "unreachable" : v.toFixed(0) + " u/s";
-    lockEl.textContent = ticks === null ? "—" : ticks === 0 ? "not locked" : `${ticks} ticks (${(ticks * CH_FRICTION_FRAMETIME).toFixed(2)}s)`;
+    lockEl.textContent =
+      ticks === null
+        ? "—"
+        : ticks === 0
+          ? "not locked"
+          : `pm_time ${ticks} → ${chainLockoutMs(ticks, SIM_FRAME_MS).toFixed(0)} ms @100fps`;
     drawGraph(hv);
   }
 

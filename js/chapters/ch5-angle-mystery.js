@@ -36,7 +36,10 @@ function runJump(turnDegPerSec, landingHeight) {
   const rising = landingHeight > 0;
   for (; ticks < MAX_TICKS; ticks++) {
     state.yaw += (turnDegPerSec * CH5_FRAMETIME * Math.PI) / 180;
-    const cmd = { forwardmove: 400, sidemove: 400 };
+    // The largest command the engine can actually be handed: forward trims at
+    // 200 and sideways at 160, both doubled by the run bit (js/core/cmdchain.js).
+    // Not symmetric, and never was -- this used to say 400/400.
+    const cmd = { forwardmove: CMD_MAX_FORWARD, sidemove: CMD_MAX_SIDE };
     const gen = pmAirMoveSteps(state, cmd, CH5_FRAMETIME);
     while (!gen.next().done) {}
     state.velocity[2] -= CH5_GRAVITY * CH5_FRAMETIME; // gravity, same as Chapter 9's airborne branch

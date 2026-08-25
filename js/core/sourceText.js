@@ -421,6 +421,29 @@ void CL_BaseMove (usercmd_t *cmd)
 `);
 const CL_BASEMOVE_HIGHLIGHT = [7, 8, 11, 12, 15, 16];
 
+// --- CL_FinishMove : sof-bin 0x80b99d4 / SoF.exe 0x20005240 (tail 0x2000575f)
+const C_CMD_NORMALIZE = block(1, `
+// client: last touch before the command is packed and sent.
+// SoF's diagonal-normalizer -- Quake 2 has no equivalent line anywhere.
+void CL_FinishMove (usercmd_t *cmd, int crosshairMode)
+{
+	...
+	cmd->msec = (int)(cls.frametime * 1000);
+	if (cmd->msec > 250) cmd->msec = 100;
+	... view angles, buttons, lean, lightlevel ...
+
+	if (cmd->sidemove && cmd->forwardmove)      // both axes only
+	{
+		vec3_t v = { (float)cmd->sidemove, (float)cmd->forwardmove, 0 };
+		VectorNormalize (v);
+		int big = max (abs(cmd->sidemove), abs(cmd->forwardmove));
+		cmd->sidemove    = (int)(v[0] * big);   // direction kept exactly,
+		cmd->forwardmove = (int)(v[1] * big);   // length rescaled to big
+	}
+}
+`);
+const CMD_NORMALIZE_HIGHLIGHT = [10, 12, 13, 14, 15, 16];
+
 // --- PAK_WriteDeltaUsercmd : sof-bin 0x80ba99c / SoF.exe 0x20005e3d ---------
 const C_CMD_CLAMP = block(1, `
 // client: pack the command for the wire.  cmd points AT cl.cmds[seq] --

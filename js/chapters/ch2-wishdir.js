@@ -23,10 +23,12 @@ function mountCh2Wishdir(section) {
           <div class="control-row">
             <label><span>forward key (W/S)</span><span id="wd-fmove-val">400</span></label>
             <input type="range" id="wd-fmove" min="-400" max="400" step="10" value="400" />
+            <p class="muted" style="font-size:12px;margin:2px 0 0">±400 is the real ceiling: 200 after the client trims it, doubled for running.</p>
           </div>
           <div class="control-row">
             <label><span>strafe key (A/D)</span><span id="wd-smove-val">0</span></label>
-            <input type="range" id="wd-smove" min="-400" max="400" step="10" value="0" />
+            <input type="range" id="wd-smove" min="-320" max="320" step="10" value="0" />
+            <p class="muted" style="font-size:12px;margin:2px 0 0">Only ±320 — sideways is trimmed at 160, not 200. Chapter 12 is entirely about that gap.</p>
           </div>
           <div class="control-row">
             <label><span>where you're looking (mouse)</span><span id="wd-yaw-val">0°</span></label>
@@ -43,9 +45,11 @@ function mountCh2Wishdir(section) {
       that's your target direction and target speed. Chapter 4 shows what happens to them next.
     </p>
     <div class="callout">
-      Try holding both forward and strafe keys (W+D). The target direction lands at a 45°
-      diagonal — but the target speed doesn't just add up to 800. It gets capped at 300, same as
-      running straight.
+      Try holding both forward and strafe keys (W+D). Push the forward slider to 400 and the
+      strafe slider to 320 — the most the game will ever hand this function — and the target
+      speed still lands at <b>300</b>, exactly what running straight ahead gives you. The cap
+      throws the rest away and keeps only the direction. Note the two sliders don't reach the same
+      number, and that the diagonal isn't 45°: Chapter 12 is about why.
     </div>
 
     <a class="next-link" href="#ch3-debugger">Continue → Chapter 4: step through the real code</a>

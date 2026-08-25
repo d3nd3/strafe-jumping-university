@@ -2,16 +2,16 @@
 //
 // This chapter used to be wrong, and wrong in an instructive way. It read
 // pmove.c:612-613 ("fmove = pm->cmd.forwardmove") and concluded that the two
-// cvars ARE the two movement numbers. They aren't. Three steps run between
-// your keyboard and Pmove(), and none of them are in the leaked source,
-// because the leak has no client and no game DLL. All three were read out of
-// the shipped binaries -- see js/core/cmdchain.js for addresses and opcodes.
+// cvars ARE the two movement numbers. They aren't. FOUR steps run between your
+// keyboard and Pmove(), and none of them are in the leaked source, because the
+// leak has no client and no game DLL. All four were read out of the shipped
+// binaries -- see js/core/cmdchain.js for addresses and opcodes.
 //
-// The old version therefore claimed 150/150 produces a push of 212 and has a
-// dead zone starting at 300 u/s. Real answer: 150/150 produces a push of 300,
-// the hard cap, and so does 400/400, and so does 150/170. The ratio changes
-// the ANGLE and nothing else. That is exactly what players report, and it now
-// has a proof instead of a story.
+// The old version claimed 150/150 produces a push of 212 with a dead zone
+// starting at 300 u/s. Real answer: 150/150 produces a push of 299.8, sitting
+// right on the cap, and 150/170 and 400/400 both produce a flat 300. The ratio
+// changes the ANGLE and essentially nothing else. That is exactly what players
+// report, and it now has a proof instead of a story.
 
 const CVAR_FRAMETIME = 0.01; // 100 ticks/sec, matches every other chapter
 
@@ -19,6 +19,7 @@ const CVAR_PRESETS = [
   { label: "SOF default 200/160", fwd: 200, side: 160 },
   { label: "your config 150/170", fwd: 150, side: 170 },
   { label: "same ratio, doubled 300/340", fwd: 300, side: 340 },
+  { label: "widest legal 150/200", fwd: 150, side: 200 },
   { label: "1:1 low 150/150", fwd: 150, side: 150 },
   { label: "1:1 maxed 400/400", fwd: 400, side: 400 },
   { label: "too low 100/100", fwd: 100, side: 100 },
@@ -34,6 +35,25 @@ const CVAR_RATIO_ROWS = [
 
 const DEG = 180 / Math.PI;
 
+// The widest key angle you can buy without losing top speed on ANY single input.
+// Searched rather than asserted: sweep every (forward, side) pair that still
+// reaches pm_maxspeed forward-only, side-only, and with both keys held, and keep
+// the one with the largest angle. Comes out at 150/200 -- the point where step
+// 2's shrink lands sideways exactly on step 3's 160 trim, with nothing wasted.
+const CVAR_BEST = (() => {
+  let best = null;
+  for (let f = 150; f <= 400; f += 1) {
+    for (let s = 150; s <= 600; s += 1) {
+      const both = cmdChain(f, s);
+      if (both.push < pm_maxspeed - 0.01) continue;
+      if (chainSingleAxis(f, "forward") < pm_maxspeed) continue;
+      if (chainSingleAxis(s, "side") < pm_maxspeed) continue;
+      if (!best || both.keyAngle > best.chain.keyAngle) best = { fwd: f, side: s, chain: both };
+    }
+  }
+  return best;
+})();
+
 function cvarFmtDeg(rad) {
   return (rad * DEG).toFixed(2) + "°";
 }
@@ -46,7 +66,8 @@ function mountChCvars(section) {
     return `<tr>
       <td class="l">${r.fwd} / ${r.side}</td>
       <td>${(r.side / r.fwd).toFixed(3)}</td>
-      <td>${c.wire.f} / ${c.wire.s}</td>
+      <td>${c.normalized ? c.normalized.f + " / " + c.normalized.s : "—"}</td>
+      <td${c.rotatedByClamp ? ' class="hot"' : ""}>${c.wire.f} / ${c.wire.s}</td>
       <td>${c.cmd.f} / ${c.cmd.s}</td>
       <td class="hot">${c.push.toFixed(1)}</td>
       <td class="hot">${cvarFmtDeg(c.keyAngle)}</td>
@@ -59,13 +80,13 @@ function mountChCvars(section) {
     <p class="lede">
       Typing bigger numbers does nothing. Typing a different <em>ratio</em> does something, but not
       what you'd guess: it doesn't change how hard the game pushes you, it changes
-      <b>where your crosshair has to point</b> while it pushes. Here's the proof, and here's why
-      150/170 is not a lucky guess.
+      <b>where your crosshair has to point</b> while it pushes. Here's the proof, here's why
+      150/170 is not a lucky guess — and here's the one config that beats it.
     </p>
 
-    <h2>Four things happen to your keys, not one</h2>
+    <h2>Five things happen to your keys, not one</h2>
     <p class="muted">
-      pmove.c only shows the last one. The other three live in the client and the game DLL, which
+      pmove.c only shows the last one. The other four live in the client and the game DLL, which
       aren't in the leaked source at all — they were read out of the shipped binaries.
     </p>
 
@@ -76,35 +97,61 @@ function mountChCvars(section) {
           ${renderStatic(C_CL_BASEMOVE, CL_BASEMOVE_HIGHLIGHT)}
         </div>
         <div class="panel-col" style="flex:1 1 340px;min-width:300px">
-          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">② the command gets trimmed · <span style="color:var(--amber)">PAK_WriteDeltaUsercmd</span></div>
-          ${renderStatic(C_CMD_CLAMP, CMD_CLAMP_HIGHLIGHT)}
+          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">② the diagonal gets shrunk · <span style="color:var(--amber)">CL_FinishMove</span></div>
+          ${renderStatic(C_CMD_NORMALIZE, CMD_NORMALIZE_HIGHLIGHT)}
         </div>
       </div>
       <div class="panel-row" style="margin-top:18px">
         <div class="panel-col" style="flex:1 1 340px;min-width:300px">
-          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">③ running doubles it · <span style="color:var(--amber)">ClientThink</span></div>
-          ${renderStatic(C_CLIENT_THINK, CLIENT_THINK_HIGHLIGHT)}
+          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">③ each axis gets trimmed · <span style="color:var(--amber)">PAK_WriteDeltaUsercmd</span></div>
+          ${renderStatic(C_CMD_CLAMP, CMD_CLAMP_HIGHLIGHT)}
         </div>
         <div class="panel-col" style="flex:1 1 340px;min-width:300px">
-          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">④ only now does pmove.c see it · <span style="color:var(--amber)">PM_AirMove</span></div>
+          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">④ running doubles it · <span style="color:var(--amber)">ClientThink</span></div>
+          ${renderStatic(C_CLIENT_THINK, CLIENT_THINK_HIGHLIGHT)}
+        </div>
+      </div>
+      <div class="panel-row" style="margin-top:18px">
+        <div class="panel-col" style="flex:1 1 340px;min-width:300px">
+          <div class="mono" style="font-size:12px;color:var(--text-dim);margin-bottom:6px">⑤ only now does pmove.c see it · <span style="color:var(--amber)">PM_AirMove</span></div>
           ${renderStatic(C_AIR_MOVE, [594, 595, 606, 612, 619, 621, 623, 624])}
+        </div>
+        <div class="panel-col" style="flex:1 1 340px;min-width:300px">
+          <div class="callout" style="margin:0">
+            <b>Read those in order once.</b> Step ② shrinks a two-key diagonal so its length is the
+            <em>larger</em> of your two numbers instead of the two of them squared and added — SOF's
+            fix for "diagonals are faster", and something Quake&nbsp;II never had. Step ③ then trims
+            each axis separately at two <em>different</em> limits. Step ④ doubles whatever survived.
+            Everything surprising about these two cvars falls out of ② and ③ disagreeing about
+            what "too big" means.
+          </div>
         </div>
       </div>
     </div>
 
     <div class="callout">
-      <b>Step ② is the whole chapter.</b> Forward is trimmed to <b>200</b>. Sideways is trimmed to
-      <b>160</b>. They are different numbers, and there is nothing you can type to raise either one.
-      The trim is written straight back into the client's own stored command, the client's
-      prediction replays that same stored command, and the server trims it again on arrival — so
-      there is no version of the game, and no cheat, where 170 means 170.
+      <b>Step ② keeps your direction and throws away your size.</b> It divides the pair by its own
+      length and multiplies it back up by the larger of the two — so the <em>angle</em> you asked
+      for survives exactly, while the <em>length</em> becomes just
+      <span class="varname">max(forward, side)</span>. Hold W+D and you get no more push than
+      holding W alone. That is the classic diagonal-speed fix, and it only runs when
+      <em>both</em> keys are down: strafe with no forward and this step is skipped entirely.
     </div>
 
     <div class="callout">
-      <b>Step ③ is why nobody noticed.</b> Holding run (or <span class="varname">cl_run 1</span>)
-      multiplies both numbers by two, <em>after</em> the trim. That's what lifts an ordinary config
-      over the <b>300</b> ceiling in step ④ — and once you're over it, the size of your numbers stops
-      mattering entirely.
+      <b>Step ③ is where a ratio can die.</b> Forward is trimmed at <b>200</b>, sideways at
+      <b>160</b>. Different limits, applied to each axis on its own — so when this one bites it
+      doesn't just shorten your push, it <em>rotates</em> it. The trim is written straight back
+      into the client's own stored command, the client's prediction replays that same stored
+      command, and the server trims it again on arrival. There is no build, and no cheat, where a
+      trimmed number survives.
+    </div>
+
+    <div class="callout">
+      <b>Step ④ is why nobody noticed any of it.</b> Holding run (or
+      <span class="varname">cl_run 1</span>) multiplies both numbers by two, after the trim. That's
+      what lifts an ordinary config over the <b>300</b> ceiling in step ⑤ — and once you're over
+      it, the size of your numbers stops mattering at all.
     </div>
 
     <h2>Same ratio, doubled, tripled, tenfold — watch it stop moving</h2>
@@ -114,9 +161,10 @@ function mountChCvars(section) {
           <tr>
             <td class="l">what you type</td>
             <td>ratio</td>
-            <td>after the trim ②</td>
-            <td>after doubling ③</td>
-            <td>push strength ④</td>
+            <td>shrunk ②</td>
+            <td>trimmed ③</td>
+            <td>doubled ④</td>
+            <td>push strength ⑤</td>
             <td>key angle</td>
           </tr>
         </thead>
@@ -127,25 +175,37 @@ function mountChCvars(section) {
       Every row has the identical ratio 1.133. Every row ends at the same push strength,
       <b>300</b>, because everything above 300 is thrown away. But the key angle moves
       <b>${cvarFmtDeg(cmdChain(150, 170).keyAngle)} → ${cvarFmtDeg(cmdChain(300, 340).keyAngle)}</b>
-      and then stops. That is exactly the thing you noticed: <em>higher numbers at the same ratio
-      aren't faster, but they do aim differently.</em> The reason is that the two axes hit their
-      trims at different moments, so raising both numbers quietly slides the ratio from
-      1.133 toward 200/160 = 1.25 and parks it there forever.
+      and then freezes. That is exactly the thing you noticed: <em>higher numbers at the same ratio
+      aren't faster, but they do aim differently.</em>
+      <br /><br />
+      Here's why. Step ② rescales your pair to length <b>max(f, s)</b>, so bigger numbers survive
+      step ② proportionally bigger. Once that length passes step ③'s limits, the two axes stop
+      being trimmed <em>together</em> — forward can still grow to 200 while sideways is already
+      stuck at 160 — and your ratio is dragged toward <b>200/160 = 1.25</b> and parks there
+      forever. Type any pair big enough and you are running 200/160 whether you meant to or not.
     </div>
 
     <h2>The formula</h2>
     <div class="panel">
       <div class="formula">
-        F = 2 × min(cl_forwardspeed, 200)<br />
-        S = 2 × min(cl_sidespeed, 160)<br /><br />
+        write f = cl_forwardspeed, s = cl_sidespeed<br /><br />
+        <span style="color:var(--text-dim)">② shrink the diagonal, keeping its direction:</span><br />
+        &nbsp;&nbsp;F = f × max(f, s) / √(f² + s²)<br />
+        &nbsp;&nbsp;S = s × max(f, s) / √(f² + s²)<br /><br />
+        <span style="color:var(--text-dim)">③ trim each axis, ④ double what's left:</span><br />
+        &nbsp;&nbsp;F = 2 × min(F, 200)&nbsp;&nbsp;&nbsp;S = 2 × min(S, 160)<br /><br />
         <b>push strength</b> = min( √(F² + S²), 300 )<br />
         <b>key angle</b> = atan2(S, F)
       </div>
       <p class="muted" style="margin-bottom:0">
-        Because the doubling happens before the 300 cap, <b>√(F²+S²) ≥ 300 for basically every
-        config anyone uses</b> — you only need √(f² + s²) ≥ 150. So push strength is pinned at 300,
-        the top line of the formula collapses to a constant, and the only thing your two numbers
-        still control is the bottom line: the angle.
+        Now read what that collapses to. As long as step ③ doesn't bite, step ② leaves the pair at
+        length <b>max(f, s)</b> — so push strength is simply
+        <b>min( 2 × max(cl_forwardspeed, cl_sidespeed), 300 )</b>, and it is pinned at 300 for any
+        config where the larger of your two numbers is <b>150 or more</b>. Every config anyone
+        actually plays clears that. The top line becomes a constant. The only thing your two
+        numbers still control is the bottom line: the angle — and step ② keeps that
+        <em>exactly</em> equal to atan2(cl_sidespeed, cl_forwardspeed), right up until step ③
+        starts trimming and drags it back toward 200/160.
       </p>
     </div>
 
@@ -233,26 +293,36 @@ function mountChCvars(section) {
       the zero side.
     </div>
     <div class="callout good">
-      <b>2. But you cannot go below 150 on forward.</b> With one key held alone the push is just
-      that axis, doubled. To still reach the 300 cap walking straight ahead you need
-      <b>2 × cl_forwardspeed ≥ 300</b>, so <span class="varname">cl_forwardspeed ≥ ${floor}</b></span>.
-      Same for sideways — but sideways is trimmed at 160, so anything from 150 to 160 is fine there
-      and 160 is the widest angle the game will give you.
+      <b>2. But neither number may drop below 150.</b> Hold one key on its own and step ② is
+      skipped — there's no diagonal to shrink — so the raw cvar goes straight into the trim and
+      then the doubling. To still reach 300 running straight ahead you need
+      <b>2 × cl_forwardspeed ≥ 300</b>, i.e. <span class="varname">cl_forwardspeed ≥ ${floor}</span>,
+      and the same floor applies to <span class="varname">cl_sidespeed</span> for strafing with no
+      forward key. Go under it and you have quietly capped your own top speed.
     </div>
     <div class="callout" id="cv-optimum">—</div>
 
     <div class="mystery">
-      <b>Your 170 is a 160.</b> Type <span class="varname">cl_sidespeed 160</span> and you will get
-      bit-for-bit identical movement to your 170 — same command, same push, same angle, forever.
-      Everything above 160 is deleted before it leaves your machine.
+      <b>Careful with the obvious shortcut.</b> It is tempting to say "sideways is trimmed at 160,
+      so <span class="varname">cl_sidespeed 170</span> is just a 160." That's only true when you
+      strafe with <em>no forward key</em>. Hold both and step ② runs first, shrinking 150/170 to
+      112/127 — comfortably under the trim, which then never fires. So 150/170 and 150/160 really
+      are different configs, at
+      <b>${cvarFmtDeg(cmdChain(150, 170).keyAngle)}</b> and
+      <b>${cvarFmtDeg(cmdChain(150, 160).keyAngle)}</b>. The trim only starts eating your ratio
+      once <span class="varname">max(f, s)</span> gets big enough to push the shrunk pair back over
+      200/160 — which for cl_forwardspeed 150 means a cl_sidespeed above about 200.
     </div>
 
     <div class="mystery">
-      <b>One more limit worth knowing.</b> Your view angles are packed into 12 bits on the wire
-      (<span class="varname">angle &gt;&gt; 4</span>, rebuilt as <span class="varname">angle × 16</span>),
-      so the finest turn the game can even represent is <b>0.088°</b>. Compare that to the margin
-      stat above and you'll see why "aim slightly wider than feels right" is universal advice: at
-      high speed there are only a handful of representable angles between perfect and worthless.
+      <b>One more limit worth knowing.</b> Your view angle is a 16-bit number covering 360°, so one
+      step is 360/65536 = <span class="varname">0.0054931640625°</span> — the exact constant the
+      client and the game DLL both multiply by. But the wire only carries the top
+      <b>12</b> of those bits (<span class="varname">angle &gt;&gt; 4</span> out,
+      <span class="varname">× 16</span> back in), so the finest turn the server can actually be
+      told about is <b>0.0879°</b>. Compare that to the margin stat above: at 600 u/s there are
+      about four representable angles between "perfect" and "worthless". That is why "aim slightly
+      wider than feels right" is universal advice.
     </div>
 
     <a class="next-link" href="#ch-zigzag">Continue → Chapter 13: flying the zig-zag</a>
@@ -537,11 +607,17 @@ function mountChCvars(section) {
 
     const straightAt = chainAimedStraightSpeed(chain.keyAngle, push, pm_airaccelerate, CVAR_FRAMETIME);
     explainEl.innerHTML = `
-      This config trims to <b>${chain.wire.f} / ${chain.wire.s}</b>, doubles to
-      <b>${chain.cmd.f} / ${chain.cmd.s}</b>, and gives a push of length
-      <b>${chain.rawPush.toFixed(1)}</b>${chain.atCap ? ` — cut down to the <b>300</b> cap` : ` (under the 300 cap)`}.
-      ${chain.forwardWasted ? `Your forward number is above 200, so <b>${chain.typed.f - chain.wire.f}</b> of it is thrown away. ` : ""}
-      ${chain.sideWasted ? `Your sideways number is above 160, so <b>${chain.typed.s - chain.wire.s}</b> of it is thrown away. ` : ""}
+      ${chain.normalized
+        ? `Both keys down, so step ② shrinks <b>${chain.typed.f} / ${chain.typed.s}</b> to
+           <b>${chain.normalized.f} / ${chain.normalized.s}</b> — same direction, length cut to
+           max(f, s) = <b>${Math.max(chain.typed.f, chain.typed.s)}</b>. `
+        : `Only one axis is non-zero, so step ② is skipped entirely. `}
+      ${chain.rotatedByClamp
+        ? `Step ③ then trims it to <b>${chain.wire.f} / ${chain.wire.s}</b>, which
+           <b>rotates your angle</b> — this config is not aiming where you typed. `
+        : `Step ③ trims nothing. `}
+      Doubled that's <b>${chain.cmd.f} / ${chain.cmd.s}</b>, a push of length
+      <b>${chain.rawPush.toFixed(1)}</b>${chain.atCap ? ` — cut down to the <b>300</b> cap` : ` (under the 300 cap, so this config is costing you push strength)`}.
       At ${speed.toFixed(0)} u/s your crosshair needs to sit
       <b>${Math.abs(off).toFixed(1)}° ${off > 0 ? "outside" : "inside"}</b> your route, and it
       would sit dead on your route at
@@ -559,15 +635,23 @@ function mountChCvars(section) {
         (Math.sqrt(speed * speed + chainGainSq(speed, push, best, pm_airaccelerate, CVAR_FRAMETIME)) - speed) * 100
       ).toFixed(0)}%</b> of the gain. Wide is cheap. Narrow is fatal.`;
 
-    const bestConfig = cmdChain(floor, CMD_SIDE_CAP);
+    const yours = cmdChain(150, 170);
     optimumEl.innerHTML = `
-      Put those two together and there is exactly one best config, and it isn't a matter of taste.
-      Keep forward at its floor of <b>${floor}</b> so straight-line running still hits 300, push
-      sideways to its trim of <b>${CMD_SIDE_CAP}</b> because that's all the game will accept, and
-      you get the widest key angle that costs you nothing:
-      <b>cl_forwardspeed ${floor} / cl_sidespeed ${CMD_SIDE_CAP}</b> →
-      <b>${cvarFmtDeg(bestConfig.keyAngle)}</b>. Nothing wider exists without giving up top speed on
-      a single key. You found it by feel; the binary agrees.`;
+      Put those together and the search is small enough to just run: keep both cvars at
+      <b>${floor}</b> or above so every single-key input still reaches 300, then take the widest
+      key angle that survives step ③ un-trimmed. The answer is
+      <b>cl_forwardspeed ${CVAR_BEST.fwd} / cl_sidespeed ${CVAR_BEST.side}</b> →
+      <b>${cvarFmtDeg(CVAR_BEST.chain.keyAngle)}</b>, and it lands on the trim exactly:
+      <b>${CVAR_BEST.chain.normalized.f}/${CVAR_BEST.chain.normalized.s}</b> shrunk,
+      <b>${CVAR_BEST.chain.cmd.f}/${CVAR_BEST.chain.cmd.s}</b> doubled — a clean 3-4-5 triangle
+      of length 400, cut back to the 300 cap. Go wider than that and step ③ starts trimming
+      sideways, which rotates you back <em>narrower</em>: 150/250 gives only
+      <b>${cvarFmtDeg(cmdChain(150, 250).keyAngle)}</b> and 150/300 only
+      <b>${cvarFmtDeg(cmdChain(150, 300).keyAngle)}</b>.
+      <br /><br />
+      Your 150/170 sits at <b>${cvarFmtDeg(yours.keyAngle)}</b> — already most of the way there,
+      and found by feel. ${CVAR_BEST.fwd}/${CVAR_BEST.side} is the same idea pushed to the exact
+      edge of what the trim allows.`;
 
     drawDial(m);
     drawGraph(m);

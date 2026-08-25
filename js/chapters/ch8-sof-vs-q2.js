@@ -29,7 +29,7 @@ const SOF_Q2_DIFFS = [
     summary:
       "Both engines cap your target speed to <span class=\"varname\">pm_duckspeed</span> while ducked. SOF only applies that cap when you're <i>also</i> standing on the ground; the leaked Q2 branch caps it off <span class=\"varname\">PMF_DUCKED</span> alone.",
     impact:
-      "Ducking mid-air — or just carrying the DUCKED flag for one tick after leaving the ground — costs you nothing in SOF. In Q2 it would clip your wishspeed to 100 for that stretch.",
+      "Ducking mid-air — or just carrying the DUCKED flag for one tick after leaving the ground — costs you nothing in SOF. In Q2 it would clip your wishspeed to <span class=\"varname\">pm_duckspeed</span> for that stretch. Worth knowing what that number really is: the leaked source initializes it to 100, but retail SoF.exe's movement-constant block (0x201375f4, in declaration order: 300, 75, 10, 1, 10, 6, 1, 400) has <b>75</b>, and IDA names that slot from the duck branch that loads it — <span class=\"varname\">pm_maxcrouchspeed</span>.",
     corroboration:
       "Confirmed two ways: hooks.cpp's own reimplementation reads <code>PMF_DUCKED && PMF_ON_GROUND</code>, and disassembling retail SoF.exe / sof-bin shows the compiled check matches.",
     sofLabel: "SOF",
@@ -146,9 +146,60 @@ const SOF_Q2_DIFFS = [
   },
 ];
 
-const BINARY_VS_SOURCE_DIFFS = [
+const CLIENT_DIFFS = [
   {
     num: 10,
+    tag: "diagonal fix",
+    title: "SOF cancels the diagonal-speed bonus before pmove even sees it",
+    cite: "CL_FinishMove · sof-bin 0x80b99d4, SoF.exe 0x20005240 (not in the leaked source at all)",
+    summary:
+      "The last thing SOF's client does to a movement command, when <em>both</em> axes are non-zero, is divide the (forward, side) pair by its own length and multiply it back up by the larger of the two. Direction is preserved exactly; length becomes <code>max(|forward|, |side|)</code> instead of <code>sqrt(forward² + side²)</code>. Quake II has no such line anywhere in its client.",
+    impact:
+      "Holding W+D asks for no more push than holding W alone — the classic \"diagonals are faster\" bug is fixed at the source. It also means <span class=\"varname\">cl_sidespeed</span> above 160 is <i>not</i> automatically discarded while you're strafe-jumping: the shrink happens first, so the per-axis trim usually never fires. Chapter 12 is built on this.",
+    corroboration:
+      "Byte-identical in both retail binaries — the SoF.exe tail at 0x2000575f is a VectorNormalize call followed by an abs/abs/cmp to pick the larger magnitude, then two __ftol stores back into cmd->sidemove and cmd->forwardmove.",
+    sofLabel: "SOF (client)",
+    sofCode: "if (side && forward) {\n  v = normalize(side, forward);\n  big = max(|side|, |forward|);\n  side = v[0]*big; forward = v[1]*big;\n}",
+    q2Label: "Q2 (client)",
+    q2Code: "// nothing — the raw\n// diagonal is sent as-is",
+  },
+  {
+    num: 11,
+    tag: "input trim",
+    title: "Forward and sideways are capped at different numbers",
+    cite: "PAK_WriteDeltaUsercmd · sof-bin 0x80ba99c, SoF.exe 0x20005e3d (not in the leaked source at all)",
+    summary:
+      "Packing the command for the wire, SOF clamps <code>forwardmove</code> to ±200, <code>sidemove</code> to ±<b>160</b>, and <code>upmove</code> to ±200 — and it writes the clamped values back through the pointer, into the client's own <code>cl.cmds[]</code> ring buffer. Quake II's <span class=\"varname\">MSG_WriteDeltaUsercmd</span> clamps nothing; it is still linked into SOF but has zero callers.",
+    impact:
+      "The two caps are asymmetric, so when the trim bites it doesn't just shorten your wish vector, it <i>rotates</i> it — which is exactly why raising cl_forwardspeed and cl_sidespeed together at a fixed ratio changes your strafe angle and then stops. Because the write is in-place, client prediction replays the trimmed command too, and PAK_ReadDeltaUsercmd repeats all six lines server-side.",
+    corroboration:
+      "Six literal compares in both binaries: <code>0FF37h/0C8h</code> for forward and up, <code>0FF5Fh/0A0h</code> for side. Also note the wire format itself — 10 bits per axis biased by +510, and view angles reduced to 12 bits, giving a 0.0879° angular resolution.",
+    sofLabel: "SOF (client + server)",
+    sofCode: "forwardmove = clamp(f, -200, 200);\nsidemove    = clamp(s, -160, 160);\nupmove      = clamp(u, -200, 200);",
+    q2Label: "Q2",
+    q2Code: "MSG_WriteShort(buf, forwardmove);\n// no clamp at any point",
+  },
+  {
+    num: 12,
+    tag: "run doubling",
+    title: "Running multiplies your movement command by two",
+    cite: "ClientThink · gamex86 0x500f53a0, mirrored in CL_PredictMovement (not in the leaked source at all)",
+    summary:
+      "Immediately before calling <code>gi.pmove</code>, the game DLL doubles forwardmove, sidemove and upmove whenever the run button bit (0x20) is set and <code>pm_flags & 0x40</code> is clear, then scales forward and side (but not up) by a 0–255 \"speed scale\" byte. Quake II has neither step; <span class=\"varname\">cl_forwardspeed</span> goes into pmove untouched.",
+    impact:
+      "This is what carries an ordinary config over <span class=\"varname\">pm_maxspeed</span>. After the ±200/±160 trim the biggest command possible is 400/320, and √(400²+320²) = 512 — comfortably past the 300 cap, so wishspeed saturates and only the direction survives. It also means the whole course's simulators must feed 400/320, not the symmetric 400/400 they used to.",
+    corroboration:
+      "Identical arithmetic in the game DLL and in the client's prediction path, so prediction and server agree. The run bit itself is set in CL_BaseMove: <code>if ((in_speed.state & 1) != (int)cl_run->value) cmd->buttons |= 0x20;</code>",
+    sofLabel: "SOF (server + prediction)",
+    sofCode: "if (run && !(pm_flags & 0x40)) {\n  forwardmove *= 2; sidemove *= 2;\n  upmove *= 2;\n}\nscale = speedByte / 255.0;",
+    q2Label: "Q2",
+    q2Code: "// no doubling, no scale —\n// cmd goes straight to Pmove",
+  },
+];
+
+const BINARY_VS_SOURCE_DIFFS = [
+  {
+    num: 13,
     tag: "jump velocity",
     title: "Jumping while already rising doesn't stack",
     cite: "pmove.c:890–898 · PM_CheckJump (no #ifdef SOF at all — retail binary diverges from the shared leaked source)",
@@ -164,25 +215,25 @@ const BINARY_VS_SOURCE_DIFFS = [
     q2Code: "velocity[2] += 270;\nif (velocity[2] < 270)\n  velocity[2] = 270;",
   },
   {
-    num: 11,
+    num: 14,
     tag: "air accelerate",
     title: "There's no separate, gentler air-acceleration formula",
     cite: "pmove.c:694–697 · PM_AirMove (no #ifdef SOF at all — retail binary diverges from the shared leaked source)",
     summary:
-      "The leaked source's airborne branch checks a cvar, <span class=\"varname\">pm_airaccelerate</span>, and when it's set, calls a whole separate function — <span class=\"varname\">PM_AirAccelerate</span> — that caps the wishspeed used for the addspeed comparison at 30 u/s, a gentler, more skill-rewarding curve than a flat accelerate call. Retail SoF.exe's compiled PM_AirMove has no such branch at all: one accelerate call, always, with accel hardcoded to a flat 1.",
+      "The leaked source's airborne branch tests <span class=\"varname\">pm_airaccelerate</span> as a boolean and, when it's set, calls a whole separate function — <span class=\"varname\">PM_AirAccelerate</span> — that caps the wishspeed used for the addspeed comparison at 30 u/s: a gentler, more skill-rewarding curve. Retail SoF.exe's compiled PM_AirMove has no such test. It reads <span class=\"varname\">pm_airaccelerate</span> once as a plain multiplicand into the ordinary accelerate formula, exactly the way the ground branch reads <span class=\"varname\">pm_accelerate</span> — and the shipped value is <b>1.0</b>, not the 0 the leaked source declares.",
     impact:
-      "This one doesn't actually change SOF's felt behavior versus a default Q2 server — <span class=\"varname\">pm_airaccelerate</span> defaults to off in the leaked source too, so PM_AirAccelerate never runs on a stock Q2 server either. What's notable: SOF's compiled binary couldn't turn it on even if a server tried. A Q2 server can cvar-flip it live; SOF's binary has nothing there to flip.",
+      "Nothing changes in felt behavior, and that's the point: a stock Q2 server leaves <span class=\"varname\">pm_airaccelerate</span> at 0, takes the <code>else</code> arm, and accelerates with a flat 1 — numerically identical to what SOF does unconditionally. The difference is structural. Q2 keeps a second, gentler air formula compiled in and reachable; SOF's binary has no second formula at all, so the 30-unit-capped curve simply doesn't exist in the game and no server setting could summon it.",
     corroboration:
-      "Confirmed by decompiling PM_AirMove out of both SoF.exe and the Linux sof-bin ELF — no 30.0 constant, no second accelerate-shaped function, no runtime branch on any accel cvar anywhere in the function.",
+      "Confirmed by decompiling PM_AirMove out of both SoF.exe and the Linux sof-bin ELF: no 30.0 constant, no second accelerate-shaped function, no runtime branch on any accel value. The tell is that <span class=\"varname\">addspeed</span> is computed exactly once, from the uncapped wishspeed, <i>before</i> the ladder/ground/air branch even starts, then reused unchanged inside the air branch — an inlined PM_AirAccelerate could not have lost its cap without changing behavior. The 1.0 itself is readable at sof-bin 0x82948f0 (3F800000h) and SoF.exe 0x20137600.",
     sofLabel: "SOF (compiled binary)",
-    sofCode: "PM_Accelerate(wishdir, wishspeed, 1);\n// always — no alternate path compiled in",
+    sofCode: "PM_Accelerate(wishdir, wishspeed,\n              pm_airaccelerate);  // = 1.0\n// always — no alternate path compiled in",
     q2Label: "Leaked source (both branches)",
     q2Code: "if (pm_airaccelerate)\n  PM_AirAccelerate(wishdir, wishspeed, accel);\nelse\n  PM_Accelerate(wishdir, wishspeed, 1);",
   },
 ];
 
 const Q2_DRIFT_DIFF = {
-  num: 12,
+  num: 15,
   tag: "ramp threshold",
   title: "Ramp launches let go of the ground sooner",
   cite: "pmove.c:731–735 · PM_CatagorizePosition",
@@ -240,6 +291,15 @@ function mountCh8SofVsQ2(section) {
     <h2>Real SOF-only behavior</h2>
     ${SOF_Q2_DIFFS.map(diffCard).join("")}
 
+    <h2>Outside pmove.c entirely — the client and game DLL the leak doesn't contain</h2>
+    <p class="muted">
+      The leaked source is <code>pmove.c</code> and nothing else: no client, no game DLL. Three of
+      the largest SOF-vs-Q2 movement differences live in those two missing files, and every one of
+      them changes what <code>pmove.c</code> is handed before its first line runs. All read
+      directly out of the shipped binaries.
+    </p>
+    ${CLIENT_DIFFS.map(diffCard).join("")}
+
     <h2>Not marked by any <code>#ifdef</code> — the shipped binary just doesn't match its own leaked source</h2>
     <p class="muted">
       These two aren't <code>#ifdef SOF</code> branches or hooks.cpp cvars — the leaked source
@@ -256,15 +316,19 @@ function mountCh8SofVsQ2(section) {
     ${diffCard(Q2_DRIFT_DIFF)}
 
     <div class="callout good">
-      Net effect: SOF preserves real fall speed through a landing (so <span class="varname">PMF_TIME_LAND</span>
-      actually fires), scrubs speed on wall contact, ignores pitch when computing wishspeed, pops
-      airborne off ramps sooner than a modern Q2 build would, and flattens every jump to exactly
-      270 u/s instead of letting one stack on top of existing upward speed. None of that touches
-      the core accelerate/wishdir math the rest of this site walks through — it's all in the
-      edges: landing, walls, stairs, slopes, and jump timing. The one piece of Q2's movement code
-      SOF's binary is missing outright — <span class="varname">PM_AirAccelerate</span>'s
-      30-unit-capped air formula — wouldn't have changed anything anyway, since it ships off by
-      default in Q2 too.
+      Net effect, inside pmove.c: SOF preserves real fall speed through a landing (so
+      <span class="varname">PMF_TIME_LAND</span> actually fires), scrubs speed on wall contact,
+      ignores pitch when computing wishspeed, pops airborne off ramps sooner than a modern Q2 build
+      would, and flattens every jump to exactly 270 u/s instead of letting one stack on top of
+      existing upward speed. None of that touches the core accelerate/wishdir math — it's all in
+      the edges: landing, walls, stairs, slopes, jump timing.
+      <br /><br />
+      Outside pmove.c is where the bigger surprise is. SOF rewrites the movement command three
+      times before Pmove() ever runs — normalizing the diagonal, trimming each axis at a
+      <em>different</em> limit, then doubling the lot for running. Quake II does none of the three.
+      That trio is why the shipped game saturates <span class="varname">wishspeed</span> at 300 for
+      every sane config, and why your two movement cvars end up controlling an angle rather than a
+      speed. Chapter 12 walks it.
     </div>
 
     <a class="next-link" href="#ch-bhop-lockout">Continue → Chapter 11: bunny-hopping</a>

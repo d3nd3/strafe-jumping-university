@@ -635,7 +635,19 @@ void PM_AirMove (void)
 	//        sidemove    = (short)(int)(cl_sidespeed    * keyFraction)
 	//        ... and sets cmd->buttons |= 0x20 for "run" (cl_run / +speed).
 	//
-	//   2. PAK_WriteDeltaUsercmd sof-bin 0x80ba99c, SoF.exe 0x20005e3d
+	//   2. CL_FinishMove         sof-bin 0x80b99d4, SoF.exe 0x20005240
+	//        if (sidemove && forwardmove) {          // both axes only
+	//            v = normalize(sidemove, forwardmove);
+	//            big = max(abs(sidemove), abs(forwardmove));
+	//            sidemove = v[0]*big;  forwardmove = v[1]*big;
+	//        }
+	//      SoF's diagonal-speed fix, absent from Quake 2 entirely. Direction is
+	//      preserved exactly; length drops from sqrt(f^2+s^2) to max(f,s), so
+	//      W+D asks for no more push than W alone. Runs BEFORE the clamp below,
+	//      which is why cl_sidespeed above 160 is not automatically wasted while
+	//      both keys are held.
+	//
+	//   3. PAK_WriteDeltaUsercmd sof-bin 0x80ba99c, SoF.exe 0x20005e3d
 	//        forwardmove clamped to [-200, 200]
 	//        sidemove    clamped to [-160, 160]   <- NOT the same cap
 	//        upmove      clamped to [-200, 200]
@@ -645,20 +657,25 @@ void PM_AirMove (void)
 	//      lines server-side. The unclamped Quake 2 MSG_WriteDeltaUsercmd is
 	//      still linked in but has zero callers.
 	//
-	//   3. ClientThink           gamex86 0x500f53a0
+	//   4. ClientThink           gamex86 0x500f53a0
 	//        if ((buttons & 0x20) && !(ps.pmove.pm_flags & 0x40))
 	//            forwardmove *= 2, sidemove *= 2, upmove *= 2;
 	//        scale = (byte)(GetSpeedScale(ent) * 255.0) * (1/255.0);
 	//        forwardmove = (int)(forwardmove * scale);
 	//        sidemove    = (int)(sidemove    * scale);   // upmove not scaled
 	//
-	// Net effect, running, healthy:
-	//        fmove = 2 * min(cl_forwardspeed, 200)
-	//        smove = 2 * min(cl_sidespeed,    160)
-	// which for any config with cl_forwardspeed^2 + cl_sidespeed^2 >= 150^2
-	// overshoots the pm_maxspeed clamp below -- so wishspeed comes out of this
-	// function as a flat 300 no matter what you typed, and the only thing the
-	// two cvars still control is atan2(smove, fmove), the direction.
+	// Net effect with both keys held, running, healthy: the pair keeps the
+	// direction atan2(cl_sidespeed, cl_forwardspeed) and ends up with length
+	//        2 * max(cl_forwardspeed, cl_sidespeed)
+	// (until step 3's trim starts biting, which rotates it back toward 200/160).
+	// Any config whose larger cvar is >= 150 therefore overshoots the
+	// pm_maxspeed clamp below, so wishspeed leaves this function as a flat 300
+	// no matter what you typed, and the only thing the two cvars still control
+	// is the direction.
+	//
+	// Single key held, no diagonal: step 2 is skipped, so it is just
+	//        2 * min(cvar, cap)   -- cap 200 forward, 160 sideways
+	// and you need cvar >= 150 to still reach 300 on that axis alone.
 	fmove = pm->cmd.forwardmove;
 	smove = pm->cmd.sidemove;
 

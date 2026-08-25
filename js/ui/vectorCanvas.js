@@ -15,6 +15,13 @@ function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
     redraw = fn;
   }
 
+  // Lets a caller do adaptive zoom (e.g. a view that grows as a plotted
+  // vector grows) -- `scale` above is only a closure variable, not a
+  // property on the returned object, so it can't be reassigned directly.
+  function setScale(s) {
+    scale = s;
+  }
+
   function resize() {
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -203,5 +210,5 @@ function createScene(canvas, { originX = 0.5, originY = 0.5, scale = 1 } = {}) {
     ctx.restore();
   }
 
-  return { ctx, toPixel, clear, grid, rings, arrow, point, angleArc, line, text, resize, cssSize, setRedraw };
+  return { ctx, toPixel, clear, grid, rings, arrow, point, angleArc, line, text, resize, cssSize, setRedraw, setScale };
 }

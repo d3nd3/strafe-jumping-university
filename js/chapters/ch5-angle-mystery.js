@@ -2,9 +2,9 @@
 const CH5_FRAMETIME = 0.01; // 100 ticks/sec, matches a classic sv_fps 100 server
 
 // Real, confirmed SoF constants -- not tuned for this chapter. CH5_JUMP_VELOCITY
-// matches PM_CheckJump's actual retail value (Chapter 8's CH7_JUMP_VELOCITY: a
+// matches PM_CheckJump's actual retail value (Chapter 9's CH7_JUMP_VELOCITY: a
 // flat assignment, decompiled straight out of SoF.exe) and CH5_GRAVITY matches
-// Chapter 8's CH7_GRAVITY (typical Quake 2 sv_gravity default). Airtime is no
+// Chapter 9's CH7_GRAVITY (typical Quake 2 sv_gravity default). Airtime is no
 // longer a slider you set by hand -- it falls out of these two numbers plus how
 // far below (or above) your takeoff point you land, exactly like a real jump.
 const CH5_JUMP_VELOCITY = 270;
@@ -39,7 +39,7 @@ function runJump(turnDegPerSec, landingHeight) {
     const cmd = { forwardmove: 400, sidemove: 400 };
     const gen = pmAirMoveSteps(state, cmd, CH5_FRAMETIME);
     while (!gen.next().done) {}
-    state.velocity[2] -= CH5_GRAVITY * CH5_FRAMETIME; // gravity, same as Chapter 8's airborne branch
+    state.velocity[2] -= CH5_GRAVITY * CH5_FRAMETIME; // gravity, same as Chapter 9's airborne branch
     pos = [pos[0] + state.velocity[0] * CH5_FRAMETIME, pos[1] + state.velocity[1] * CH5_FRAMETIME];
     height += state.velocity[2] * CH5_FRAMETIME;
     // PM_SnapPosition's real 16-bit velocity round-trip (physics.js) -- runs
@@ -74,7 +74,7 @@ function describeLanding(h) {
 
 function mountCh5AngleMystery(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 5 · The Angle Mystery</div>
+    <div class="chapter-kicker">Chapter 7 · The Angle Mystery</div>
     <h1>There's a "just right" turning speed</h1>
     <p class="lede">
       Hold forward + strafe and keep turning your view during a real jump: the target direction
@@ -86,7 +86,7 @@ function mountCh5AngleMystery(section) {
       <b>This is a real SOF jump, not an arbitrary flight:</b> liftoff at
       <span class="varname">270 u/s</span> vertical — PM_CheckJump's actual, confirmed retail
       value — with gravity at <span class="varname">800 u/s²</span> pulling you back down, the same
-      two numbers Chapter 8's 3D playground uses. Airtime isn't a knob you set anymore; it falls
+      two numbers Chapter 9's 3D playground uses. Airtime isn't a knob you set anymore; it falls
       straight out of that physics, driven by how far below or above your takeoff point you land.
     </div>
 
@@ -145,7 +145,7 @@ function mountCh5AngleMystery(section) {
       wins — that's why the graph's peak moves when you drag slider ① (where you land).
     </div>
 
-    <a class="next-link" href="#ch6-simulator">Continue → Chapter 6: fly it yourself</a>
+    <a class="next-link" href="#ch6-simulator">Continue → Chapter 8: fly it yourself</a>
   `;
 
   const canvas = section.querySelector("#am-canvas");

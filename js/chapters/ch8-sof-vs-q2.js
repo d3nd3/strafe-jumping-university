@@ -1,4 +1,4 @@
-// Chapter 8 — a catalogue of every place pmove.c's own `#ifdef SOF` branches
+// Chapter 10 — a catalogue of every place pmove.c's own `#ifdef SOF` branches
 // (plus the sofree hooks.cpp reverse-engineering project's three physics
 // cvars: _sf_sv_q2_mode, _sf_sv_q2_style_jump, _sf_sv_q2_slide_fix) show SOF
 // and Quake II's movement code actually diverging, with the felt gameplay
@@ -221,7 +221,7 @@ function diffCard(d) {
 
 function mountCh8SofVsQ2(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 8 · SOF vs. Q2</div>
+    <div class="chapter-kicker">Chapter 10 · SOF vs. Q2</div>
     <h1>Every verified difference between SOF and Quake II's movement code</h1>
     <p class="lede">
       SOF's engine is a licensed fork of Quake II. Its leaked <code>pmove.c</code> still carries
@@ -267,6 +267,6 @@ function mountCh8SofVsQ2(section) {
       default in Q2 too.
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 9: recap</a>
+    <a class="next-link" href="#ch-bhop-lockout">Continue → Chapter 11: bunny-hopping</a>
   `;
 }

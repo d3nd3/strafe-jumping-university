@@ -1,7 +1,7 @@
 
 function mountCh2Wishdir(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 2 · Foundations</div>
+    <div class="chapter-kicker">Chapter 3 · Foundations</div>
     <h1>What your keys and mouse turn into</h1>
     <p class="lede">
       Every instant, the game turns your keys and mouse into two things: a
@@ -40,7 +40,7 @@ function mountCh2Wishdir(section) {
     <p class="muted">
       "Forward" and "right" only depend on where you're looking — not on how you're actually
       moving. Add them together, weighted by your keys, and clamp the result to top speed (300):
-      that's your target direction and target speed. Chapter 3 shows what happens to them next.
+      that's your target direction and target speed. Chapter 4 shows what happens to them next.
     </p>
     <div class="callout">
       Try holding both forward and strafe keys (W+D). The target direction lands at a 45°
@@ -48,7 +48,7 @@ function mountCh2Wishdir(section) {
       running straight.
     </div>
 
-    <a class="next-link" href="#ch3-debugger">Continue → Chapter 3: step through the real code</a>
+    <a class="next-link" href="#ch3-debugger">Continue → Chapter 4: step through the real code</a>
   `;
 
   const canvas = section.querySelector("#wd-canvas");

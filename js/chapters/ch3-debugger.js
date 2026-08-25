@@ -1,11 +1,11 @@
 // The step descriptions (ACCELERATE_DESCRIPTIONS / describeAccelerateStep,
 // AIR_MOVE_DESCRIPTIONS / describeAirMoveToAccelerate, AIR_ACCELERATE_DESCRIPTIONS
-// / describeAirAccelerateStep) live in core/sourceText.js -- Chapter 6 and 7's
+// / describeAirAccelerateStep) live in core/sourceText.js -- Chapter 8 and 8's
 // "Freeze & inspect" panels reuse describeAccelerateStep, not a copy of it.
 
 function mountCh3Debugger(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 3 · Step Through the Real Code</div>
+    <div class="chapter-kicker">Chapter 4 · Step Through the Real Code</div>
     <h1>The one function that does all of this</h1>
     <p class="lede">Press <strong>Step</strong> and watch it run, one line at a time, in the real game code and a JS copy, side by side.</p>
 
@@ -190,7 +190,7 @@ function mountCh3Debugger(section) {
       how big the boost itself is. Two different numbers, same name, same function.
     </div>
 
-    <a class="next-link" href="#ch4-air-vs-ground">Continue → Chapter 4: ground vs. air</a>
+    <a class="next-link" href="#ch4-air-vs-ground">Continue → Chapter 5: ground vs. air</a>
   `;
 
   // ---- Section 1: PM_AirMove -> PM_Accelerate, the real calling chain ----

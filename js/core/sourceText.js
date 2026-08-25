@@ -342,3 +342,51 @@ const AIR_ACCELERATE_DESCRIPTIONS = {
 function describeAirAccelerateStep(step) {
   return `<div>${AIR_ACCELERATE_DESCRIPTIONS[step.id] || ""}</div>`;
 }
+
+// --- pmove.c : PM_Friction (lines 369-411) -----------------------------------
+const C_FRICTION = block(369, `
+void PM_Friction (void)
+{
+	float	*vel;
+	float	speed, newspeed, control;
+	float	friction;
+	float	drop;
+
+	vel = pml.velocity;
+
+	speed = sqrt(vel[0]*vel[0] +vel[1]*vel[1] + vel[2]*vel[2]);
+	if (speed < 1)
+	{
+		vel[0] = 0;
+		vel[1] = 0;
+		return;
+	}
+
+	drop = 0;
+
+// apply ground friction
+	if ((pm->groundentity && pml.groundsurface && !(pml.groundsurface->flags & SURF_SLICK) ) || (pml.ladder) )
+	{
+		friction = pm_friction;
+		control = speed < pm_stopspeed ? pm_stopspeed : speed;
+		drop += control*friction*pml.frametime;
+	}
+
+// apply water friction
+	if (pm->waterlevel && !pml.ladder)
+		drop += speed*pm_waterfriction*pm->waterlevel*pml.frametime;
+
+// scale the velocity
+	newspeed = speed - drop;
+	if (newspeed < 0)
+	{
+		newspeed = 0;
+	}
+	newspeed /= speed;
+
+	vel[0] = vel[0] * newspeed;
+	vel[1] = vel[1] * newspeed;
+	vel[2] = vel[2] * newspeed;
+}
+`);
+const FRICTION_HIGHLIGHT = [378, 389, 392, 393, 401];

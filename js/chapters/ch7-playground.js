@@ -1,4 +1,4 @@
-// Chapter 8: everything the course taught, in one 3D playground. Reuses the
+// Chapter 9: everything the course taught, in one 3D playground. Reuses the
 // exact same physics.js functions as every earlier chapter -- this is not a
 // separate "game build", it's the same pmAirMoveSteps/pmAccelerateSteps code
 // with a ground, gravity, and a jump button bolted on around it, and a
@@ -6,7 +6,7 @@
 
 // Real Quake-engine clients call PM_AirMove once per rendered frame, using
 // that frame's real duration as frametime -- client frame rate is a genuine
-// movement input, not cosmetic (see Chapter 6's matching callout). This
+// movement input, not cosmetic (see Chapter 8's matching callout). This
 // starts at 142fps (~7ms), the rate competitive SoF play has historically
 // locked to; the dropdown below lets you compare other real client rates.
 // Independent of display refresh rate either way -- see the accumulator
@@ -54,7 +54,7 @@ function toThree(v, out) {
 
 function mountCh7Playground(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 7 · The Full Picture</div>
+    <div class="chapter-kicker">Chapter 9 · The Full Picture</div>
     <h1>Try it all, in 3D</h1>
     <p class="lede">Same target direction, same boost function, same turning trick — now with a
     ground, gravity, and a jump, watched from behind in 3D.</p>
@@ -137,7 +137,7 @@ function mountCh7Playground(section) {
     <div class="callout">
       This is the exact same <code>pmAirMoveSteps</code> / <code>PM_Accelerate</code> code from
       every earlier chapter. Ground movement adds friction and a boost power of 10; leave the
-      ground and it drops to 1, plus gravity — the Chapter 4 split, now under your feet.
+      ground and it drops to 1, plus gravity — the Chapter 5 split, now under your feet.
     </div>
 
     <div class="callout">
@@ -153,7 +153,7 @@ function mountCh7Playground(section) {
       <button class="btn primary" id="pg-resume">▶ Resume</button>
     </div>
 
-    <a class="next-link" href="#ch8-sof-vs-q2">Continue → Chapter 8: SOF vs. Q2</a>
+    <a class="next-link" href="#ch8-sof-vs-q2">Continue → Chapter 10: SOF vs. Q2</a>
   `;
 
   const wrap = section.querySelector("#pg-wrap");
@@ -442,7 +442,7 @@ function mountCh7Playground(section) {
   function tick() {
     const wasGrounded = grounded;
     const turnRateDegPerSec = +turnRateInput.value;
-    // Note the sign here is opposite of Chapter 6's: this chapter's toThree()
+    // Note the sign here is opposite of Chapter 8's: this chapter's toThree()
     // mapping (physics Z-up -> three.js Y-up) swaps two axes, which flips
     // handedness for orientation (same reason the strafe direction needed
     // compensating below). Verified against the actual rendered camera, not
@@ -497,7 +497,7 @@ function mountCh7Playground(section) {
     // look correct after that flip, but "right" is an orientation quantity
     // (effectively a cross product), so it comes out mirrored on screen
     // unless we negate it here. Confirmed by comparing against the camera's
-    // actual on-screen right vector -- physics.js and Chapter 6 are untouched
+    // actual on-screen right vector -- physics.js and Chapter 8 are untouched
     // and correct; this compensation is local to this chapter's 3D mapping.
     const wishvel = [forward[0] * fmove - right[0] * smove, forward[1] * fmove - right[1] * smove, 0];
     const wishdir = [...wishvel];

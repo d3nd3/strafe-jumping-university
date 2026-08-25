@@ -13,7 +13,7 @@ let CH6_TRAIL_MAX = 220; // trail length in *ticks*, so its real-time duration s
 
 function mountCh6Simulator(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 6 · Try It Yourself</div>
+    <div class="chapter-kicker">Chapter 8 · Try It Yourself</div>
     <h1>Now fly it yourself</h1>
     <p class="lede">This is the exact same code from every earlier chapter, running live off your keyboard. No gravity or ground on purpose — just the pure steering trick.</p>
 
@@ -59,7 +59,7 @@ function mountCh6Simulator(section) {
     </div>
 
     <div class="callout">
-      No gravity or landing here on purpose — this is just the turning trick from Chapter 5, with
+      No gravity or landing here on purpose — this is just the turning trick from Chapter 7, with
       no timer running out, so you can feel it for as long as you want.
     </div>
 
@@ -75,12 +75,12 @@ function mountCh6Simulator(section) {
 
     <div id="sim-debugger-wrap" style="display:none">
       <h2>Frozen. Here's exactly what just happened.</h2>
-      <p class="muted">These are the real numbers from the instant you paused — same debugger as Chapter 3.</p>
+      <p class="muted">These are the real numbers from the instant you paused — same debugger as Chapter 4.</p>
       <div class="panel" id="sim-debugger-mount"></div>
       <button class="btn primary" id="sim-resume">▶ Resume flying</button>
     </div>
 
-    <a class="next-link" href="#ch7-playground">Continue → Chapter 7: the full picture in 3D</a>
+    <a class="next-link" href="#ch7-playground">Continue → Chapter 9: the full picture in 3D</a>
   `;
 
   const canvas = section.querySelector("#sim-canvas");
@@ -238,7 +238,7 @@ function mountCh6Simulator(section) {
     sctx.stroke();
   }
 
-  // Fixed-timestep accumulator -- see Chapter 7's identical comment. Calling
+  // Fixed-timestep accumulator -- see Chapter 9's identical comment. Calling
   // tick() once per requestAnimationFrame callback made simulated speed
   // depend on the viewer's monitor refresh rate (slow motion at 60Hz, ~44%
   // too fast at 144Hz); this runs tick() as many times as needed to catch up

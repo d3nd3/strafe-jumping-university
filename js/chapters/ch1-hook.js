@@ -15,7 +15,7 @@ function mountCh1Hook(section) {
           <p class="muted" style="font-size:13px;margin-top:8px">
             <b>What you're looking at:</b> a bird's-eye view of one player. The dot is them; the
             line is the path they just flew. This is real, running physics — not a decoration —
-            it's the same replay you'll be able to build yourself by Chapter&nbsp;5.
+            it's the same replay you'll be able to build yourself by Chapter&nbsp;8.
           </p>
         </div>
         <div class="panel-col">
@@ -31,7 +31,7 @@ function mountCh1Hook(section) {
         </div>
       </div>
     </div>
-    <a class="next-link" href="#ch2-wishdir">Start → Chapter 2: what your keys actually do</a>
+    <a class="next-link" href="#ch-bigpicture">Start → Chapter 2: the big picture</a>
   `;
 
   const canvas = section.querySelector("#hook-canvas");
@@ -40,7 +40,7 @@ function mountCh1Hook(section) {
 
   // Real physics, not a decoration: this is one bounded "jump" run through
   // the exact same pmAirMoveSteps generator every later chapter uses, at a
-  // turning speed picked (in Chapter 5's own sweep) to climb cleanly. It
+  // turning speed picked (in Chapter 7's own sweep) to climb cleanly. It
   // loops: fly for ~0.7s, hold the final speed a moment, then reset.
   const TICKS = 70;
   const DT = 0.01;

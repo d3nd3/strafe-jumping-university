@@ -18,10 +18,10 @@ function escapeHtml(s) {
 
 function mountCh4AirVsGround(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 4 · Ground vs. Air</div>
+    <div class="chapter-kicker">Chapter 5 · Ground vs. Air</div>
     <h1>On the ground you speed up 10× faster</h1>
     <p class="lede">
-      The boost function from Chapter 3 doesn't care if you're on the ground or in the air — it
+      The boost function from Chapter 4 doesn't care if you're on the ground or in the air — it
       just uses whatever <b>boost power</b> number it's handed. That number is picked one step
       earlier, right here:
     </p>
@@ -37,7 +37,7 @@ function mountCh4AirVsGround(section) {
     </div>
 
     <h2>See it happen</h2>
-    <p class="muted">Both bars use the exact Chapter 3 function, just holding forward, no turning.</p>
+    <p class="muted">Both bars use the exact Chapter 4 function, just holding forward, no turning.</p>
 
     <div class="panel">
       <div class="controls">
@@ -65,11 +65,11 @@ function mountCh4AirVsGround(section) {
     <div class="mystery">
       <strong>So how does air-strafing work at all?</strong> Weak boost only limits how fast you
       catch up <em>in the target direction</em>. It says nothing about speed you already have
-      sideways to that. Chapter 5 turns the target direction away from straight-ahead and shows
+      sideways to that. Chapter 7 turns the target direction away from straight-ahead and shows
       what that sideways speed does.
     </div>
 
-    <a class="next-link" href="#ch5-angle-mystery">Continue → Chapter 5: the angle mystery</a>
+    <a class="next-link" href="#ch-friction">Continue → Chapter 6: friction</a>
   `;
 
   const barGround = section.querySelector("#bar-ground");

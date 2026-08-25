@@ -96,35 +96,20 @@ function mountCh7Playground(section) {
             SOF physics (uncheck for Quake 2)
           </label>
           <p class="muted" style="font-size:12px;margin:2px 0 0">
-            Four real differences between the two games, ported from SoF's own movement code:
-            <br />1. You leave the ground once your upward speed passes 100 u/s (checked) instead
-            of Quake 2's 180 u/s (unchecked) — run up the ramp on the right to feel it; lower means
-            less of your launch speed gets eaten by ground friction before you're airborne.
-            <br />2. The instant you land, SOF resets your vertical speed to 0 (checked). Quake 2
-            leaves it exactly as it was the frame before you touched down (unchecked) — it only
-            gets zeroed on the very next frame either way, so use <b>Freeze &amp; inspect</b> right
-            as you land and watch <b>VERTICAL SPEED</b> in the HUD to see it: 0 in SOF, still your
-            fall speed in Quake 2, for that one frame.
-            <br />3. Run straight into the wall on the left: SOF (checked) "rubs" extra speed off
-            you on impact — hit it dead-on and lose about half your speed, graze it at an angle and
-            barely lose any. Quake 2 (unchecked) skips that scrub and keeps 100% of whatever speed
-            survives the slide, so wall-sliding is faster there.
-            <br />4. Land hard enough (faster than 200 u/s downward — a normal jump does it) and SOF
-            (checked) locks jumping out for a stretch (~130ms at 142fps): hooks.cpp's own comment
-            says why outright — "this is what causes q2 to not use TIME_JUMP". A different SOF-only
-            line elsewhere (PM_StepSlideMove) is the actual cause: it clips your fall speed to near
-            zero before landing in Quake 2, so the same landing check almost never fires there. This
-            is the one that actually caps speed under pure jump-spam: hold forward and mash jump
-            with no turning and SPEED plateaus at exactly 300 in SOF, no matter how long you hop —
-            uncheck this box and it won't.
-            <br />5. <b>Not</b> a difference, despite looking like one at first: air acceleration.
-            id's public Quake 2 source gates a special 30-unit-capped boost formula behind
-            <span class="varname">pm_airaccelerate</span> (off by default, so stock Q2 falls back
-            to boost power 1 in the air). Decompiling retail SoF.exe directly shows it never had
-            that gate or the capped formula at all — SoF's air boost is always just power 1,
-            unconditionally. Same number both games, arrived at two structurally different ways —
-            this toggle doesn't change your air control because there's nothing here for it to
-            toggle.
+            Four real SOF-vs-Q2 differences, ported from SoF's own movement code:
+            <br />1. <b>Leaving the ground:</b> 100 u/s upward in SOF, 180 in Q2 — try the ramp.
+            Lower means less of a launch gets eaten by ground friction.
+            <br />2. <b>Landing:</b> SOF zeroes vertical speed instantly; Q2 keeps it for one extra
+            frame. Freeze &amp; inspect right as you land to see it.
+            <br />3. <b>Hitting the wall:</b> SOF "rubs" off extra speed on impact (up to half, hit
+            dead-on); Q2 doesn't.
+            <br />4. <b>Jump lockout:</b> a hard landing (any normal jump) locks out jumping for
+            ~130ms in SOF; Q2 almost never triggers it. This is what caps pure jump-spam at exactly
+            300 — try holding forward and mashing jump with no turning.
+            <br />5. <b>Not</b> a real difference: air acceleration. Q2's source has a togglable
+            30-unit-capped air-boost formula, off by default. SoF's compiled binary never had it —
+            just a flat boost power of 1, always. Same number, unrelated reasons; this toggle
+            changes nothing here.
           </p>
           <div class="btn-row" style="margin-top:10px">
             <button class="btn" id="pg-reset">⟲ Reset</button>
@@ -132,18 +117,10 @@ function mountCh7Playground(section) {
             <button class="btn" id="pg-fullscreen">⛶ Fullscreen (F)</button>
           </div>
           <p class="muted" style="font-size:12.5px;margin-top:10px" id="pg-hint">
-            Click the scene, then <b>W/S</b> move, <b>A/D</b> strafe, <b>←/→</b> turn,
-            <b>Space</b> jump, <b>Ctrl</b> crouch (caps your speed at 100 while grounded, see MAX
-            SPEED in the HUD), <b>F</b> fullscreen. Tap jump for each hop — holding it down only
-            fires once: real SoF/Quake 2 latches the jump key until you release it (PMF_JUMP_HELD),
-            so bunny-hopping means tapping, not holding. A hard-enough landing also locks jumping
-            out for a brief stretch (PMF_TIME_LAND, ~130ms at 142fps) before it'll fire again even
-            if you do tap in time — try it: hold forward and mash jump with no turning at all, and
-            watch SPEED plateau at exactly 300, never climb, no matter how long you keep hopping.
-            Air-strafe by tapping turn while airborne. Turn around and head back past your
-            spawn point to find a wall — it's the one thing here you can actually collide
-            with and slide along; everything else besides the ground and ramp is just
-            decoration.
+            Click the scene, then <b>W/S</b> move, <b>A/D</b> strafe, <b>←/→</b> turn, <b>Space</b>
+            jump, <b>Ctrl</b> crouch (caps speed at 100 while grounded), <b>F</b> fullscreen.
+            Tap jump, don't hold it — holding only fires once (see difference 4, left). Air-strafe
+            by tapping turn while airborne. Head back past spawn to find the one collidable wall.
           </p>
         </div>
         <div class="panel-col" style="flex:1 1 480px">
@@ -164,12 +141,9 @@ function mountCh7Playground(section) {
     </div>
 
     <div class="callout">
-      <b>Client frame rate</b> is a real movement setting, not cosmetic: the actual game calls this
-      exact function once per rendered frame, using that frame's real duration as
-      <span class="varname">frametime</span>. More frames per real second means more, smaller boost
-      applications, each re-measuring your turn angle against your target direction sooner — a
-      genuine advantage while air-strafing. That's why competitive SoF play has historically locked
-      the client to specific rates like 142fps (≈7ms frames) rather than an uncapped one.
+      <b>Client frame rate</b> is a real movement input, not cosmetic — more frames per second means
+      more, smaller boosts, each re-measuring your turn angle sooner. That's why competitive SoF
+      locked to fixed rates like 142fps instead of running uncapped.
     </div>
 
     <div id="pg-debugger-wrap" style="display:none">

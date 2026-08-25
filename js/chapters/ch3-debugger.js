@@ -19,28 +19,19 @@ function mountCh3Debugger(section) {
       <span class="term-chip"><b>your real speed</b> <span class="varname">velocity</span> = NOT a unit vector — its length literally <em>is</em> your current speed</span>
     </div>
     <p class="muted" style="margin-top:2px">
-      Confirmed straight from id Software's own Quake 2 source (<span class="varname">qcommon/pmove.c</span>):
-      right before <span class="varname">PM_AirMove</span> calls this function, it runs
-      <span class="varname">wishspeed = VectorNormalize(wishdir)</span> — that line divides
-      <span class="varname">wishdir</span> by its own length, which forces its length to exactly 1
-      and hands the length it used to have over to <span class="varname">wishspeed</span> instead.
-      So every time this function runs, <span class="varname">wishdir</span> is guaranteed to be
-      a pure direction (length 1) and <span class="varname">velocity</span> is never touched that
-      way — its length is always your real, uncapped speed.
+      <span class="varname">PM_AirMove</span> runs <span class="varname">wishspeed =
+      VectorNormalize(wishdir)</span> right before calling this — that forces
+      <span class="varname">wishdir</span> to length 1 and hands its old length to
+      <span class="varname">wishspeed</span>. <span class="varname">velocity</span> is never
+      touched that way, so its length is always your real, uncapped speed.
     </p>
 
     <div class="mystery">
-      <strong>Common question: if wishspeed is "the length wishdir had," does that mean wishspeed
-      equals the length of velocity (your actual speed)?</strong> No — and this trips people up
-      constantly. <span class="varname">wishspeed</span> is the length of <span class="varname">wishvel</span>,
-      a totally different, short-lived vector built fresh every tick from your <em>keys and view
-      angle</em> (Section 1 below shows exactly how). <span class="varname">velocity</span> is your
-      <em>actual</em>, accumulated motion — built up over many previous ticks, and never directly
-      set from your input at all. They're two unrelated numbers that happen to share the word
-      "speed." <span class="varname">wishspeed</span> is capped at 300 (or 100 crouched);
-      <span class="varname">velocity</span>'s length has no such cap, and can climb well past 300 —
-      that gap between "what you're asking for" and "what you actually have" is the entire reason
-      circle-strafing works.
+      <strong>Does wishspeed equal your actual speed?</strong> No. <span class="varname">wishspeed</span>
+      is the length of <span class="varname">wishvel</span> — a short-lived vector rebuilt every tick
+      from your keys and view angle. <span class="varname">velocity</span> is your real, accumulated
+      motion, never set from input directly. <span class="varname">wishspeed</span> is capped at 300;
+      <span class="varname">velocity</span> isn't. That gap is the entire reason circle-strafing works.
     </div>
 
     <h2>Section 1 — where wishdir and wishspeed actually come from</h2>
@@ -145,20 +136,14 @@ function mountCh3Debugger(section) {
 
     <h2>Section 3 — PM_AirAccelerate: real Quake 2 code, not SoF's own</h2>
     <p class="muted">
-      id's public <span class="varname">pmove.c</span> has a <em>second</em> boost function meant
-      for the air, with a gentler 30-unit cap baked in, gated behind
-      <span class="varname">pm_airaccelerate</span> as a boolean: nonzero calls the capped
-      function, zero falls back to the ordinary boost with power 1. But decompiling the actual
-      retail <span class="varname">SoF.exe</span> binary directly — cross-checked against a Linux
-      build too — shows no such branch at all. There's one boost computation in the air, and
-      <span class="varname">pm_airaccelerate</span> feeds it directly as the strength, exactly the
-      way <span class="varname">pm_accelerate</span> feeds the ground/ladder boost. It's hardcoded
-      to <b>1</b> (not 0 — always on, just weak), and the capped 30-unit formula is nowhere in the
-      compiled code: no <code>30.0</code> constant, no separate <em>addspeed</em> computed from a
-      clamped wish speed — the tell that would have to survive even if the call were merely
-      inlined. So it's not that SoF ships this function disabled; SoF's own
-      <span class="varname">PM_AirMove</span> was written without it. Worth understanding anyway —
-      it's real code, and some other Quake 2 engines and mods do wire it up.
+      id's public <span class="varname">pmove.c</span> has a second boost function for the air,
+      with a gentler 30-unit cap, gated behind <span class="varname">pm_airaccelerate</span>. But
+      decompiling retail <span class="varname">SoF.exe</span> (and a Linux build, cross-checked)
+      shows no such branch at all — just one boost computation, with
+      <span class="varname">pm_airaccelerate</span> hardcoded to <b>1</b> as its strength. The
+      30-unit cap formula isn't in the compiled code anywhere. SoF's own
+      <span class="varname">PM_AirMove</span> was written without this function — it's real code,
+      just not SoF's. Some other Quake 2 engines and mods do use it.
     </p>
     <div class="panel">
       <div class="panel-row">

@@ -96,7 +96,7 @@ function mountCh7Playground(section) {
             SOF physics (uncheck for Quake 2)
           </label>
           <p class="muted" style="font-size:12px;margin:2px 0 0">
-            Three real differences between the two games, ported from SoF's own movement code:
+            Four real differences between the two games, ported from SoF's own movement code:
             <br />1. You leave the ground once your upward speed passes 100 u/s (checked) instead
             of Quake 2's 180 u/s (unchecked) — run up the ramp on the right to feel it; lower means
             less of your launch speed gets eaten by ground friction before you're airborne.
@@ -109,7 +109,15 @@ function mountCh7Playground(section) {
             you on impact — hit it dead-on and lose about half your speed, graze it at an angle and
             barely lose any. Quake 2 (unchecked) skips that scrub and keeps 100% of whatever speed
             survives the slide, so wall-sliding is faster there.
-            <br />4. <b>Not</b> a difference, despite looking like one at first: air acceleration.
+            <br />4. Land hard enough (faster than 200 u/s downward — a normal jump does it) and SOF
+            (checked) locks jumping out for a stretch (~130ms at 142fps): hooks.cpp's own comment
+            says why outright — "this is what causes q2 to not use TIME_JUMP". A different SOF-only
+            line elsewhere (PM_StepSlideMove) is the actual cause: it clips your fall speed to near
+            zero before landing in Quake 2, so the same landing check almost never fires there. This
+            is the one that actually caps speed under pure jump-spam: hold forward and mash jump
+            with no turning and SPEED plateaus at exactly 300 in SOF, no matter how long you hop —
+            uncheck this box and it won't.
+            <br />5. <b>Not</b> a difference, despite looking like one at first: air acceleration.
             id's public Quake 2 source gates a special 30-unit-capped boost formula behind
             <span class="varname">pm_airaccelerate</span> (off by default, so stock Q2 falls back
             to boost power 1 in the air). Decompiling retail SoF.exe directly shows it never had
@@ -125,8 +133,13 @@ function mountCh7Playground(section) {
           </div>
           <p class="muted" style="font-size:12.5px;margin-top:10px" id="pg-hint">
             Click the scene, then <b>W/S</b> move, <b>A/D</b> strafe, <b>←/→</b> turn,
-            <b>Space</b> jump (hold it through a landing to auto-hop), <b>Ctrl</b> crouch
-            (caps your speed at 100 while grounded, see MAX SPEED in the HUD), <b>F</b> fullscreen.
+            <b>Space</b> jump, <b>Ctrl</b> crouch (caps your speed at 100 while grounded, see MAX
+            SPEED in the HUD), <b>F</b> fullscreen. Tap jump for each hop — holding it down only
+            fires once: real SoF/Quake 2 latches the jump key until you release it (PMF_JUMP_HELD),
+            so bunny-hopping means tapping, not holding. A hard-enough landing also locks jumping
+            out for a brief stretch (PMF_TIME_LAND, ~130ms at 142fps) before it'll fire again even
+            if you do tap in time — try it: hold forward and mash jump with no turning at all, and
+            watch SPEED plateau at exactly 300, never climb, no matter how long you keep hopping.
             Air-strafe by tapping turn while airborne. Turn around and head back past your
             spawn point to find a wall — it's the one thing here you can actually collide
             with and slide along; everything else besides the ground and ramp is just
@@ -435,7 +448,7 @@ function mountCh7Playground(section) {
   });
 
   // ---- movement state (vec3 convention: x,y horizontal, z up) ----
-  let position, velocity, yaw, grounded, trailPts, camYaw, ducked;
+  let position, velocity, yaw, grounded, trailPts, camYaw, ducked, landTime;
   let lastFrame = null;
   let paused = false;
 
@@ -447,11 +460,13 @@ function mountCh7Playground(section) {
     trailPts = [];
     camYaw = 0;
     ducked = false;
+    landTime = 0; // PMF_TIME_LAND countdown -- see pmCheckJump in physics.js
     lastFrame = null;
     jumpState.held = false;
   }
 
   function tick() {
+    const wasGrounded = grounded;
     const turnRateDegPerSec = +turnRateInput.value;
     // Note the sign here is opposite of Chapter 6's: this chapter's toThree()
     // mapping (physics Z-up -> three.js Y-up) swaps two axes, which flips
@@ -465,8 +480,22 @@ function mountCh7Playground(section) {
       pendingYawDelta = 0;
     }
 
+    // pm_time countdown (pmove.c:1480-1494) -- runs every tick, unconditionally,
+    // stock Quake 2 behavior with no SOF-specific gate on it at all. Real engine:
+    // `msec = cmd.msec >> 3; if (!msec) msec = 1;` -- genuinely framerate-sensitive:
+    // at 142fps (~7ms/frame) cmd.msec>>3 is 0, floored to a flat 1 per frame no
+    // matter how short the frame actually was; at 60fps (~16.7ms) it's 2 per frame.
+    // Higher framerates burn the same landTime budget in *less real time* -- a real,
+    // known quirk of bunny-hop timing across client framerates, consistent with this
+    // app's whole "client framerate is a real movement input" theme.
+    if (landTime > 0) {
+      const cmdMsec = Math.max(1, Math.round(CH7_FRAMETIME * 1000));
+      const msec8 = Math.max(1, cmdMsec >> 3);
+      landTime = msec8 >= landTime ? 0 : landTime - msec8;
+    }
+
     const upmove = keys.has(" ") ? 400 : 0;
-    if (pmCheckJump(jumpState, upmove, grounded)) {
+    if (pmCheckJump(jumpState, upmove, grounded, landTime > 0)) {
       velocity[2] = CH7_JUMP_VELOCITY;
       grounded = false;
       playJumpSound();
@@ -581,6 +610,34 @@ function mountCh7Playground(section) {
     const touching = position[2] <= groundH;
     if (touching) {
       position[2] = groundH;
+
+      // PM_CatagorizePosition's landing-time check (pmove.c:761-770): a hard
+      // enough landing (velocity[2] < -200 the instant you touch down) locks
+      // out jumping for a stretch via PMF_TIME_LAND (see pmCheckJump in
+      // physics.js). The check itself has no `#ifdef SOF` on it -- but
+      // whether it actually *fires* on an ordinary jump depends entirely on
+      // a SOF-vs-Q2 difference elsewhere: hooks.cpp's own comment gives this
+      // away outright -- right above PM_StepSlideMove's Q2-only special case
+      // ("if (_sf_sv_q2_style_jump->value || _sf_sv_q2_mode->value)
+      // pml_velocity[2] = down_v[2];", pmove.c:333-335) sits the line
+      // "// This is what causes q2 to not use TIME_JUMP lol". That copy runs
+      // *during* movement resolution, before PM_CatagorizePosition ever
+      // checks velocity[2] -- in Q2 it overwrites your vertical speed with
+      // the already-ground-clipped value from the plain "down" slide pass,
+      // so by the time the -200 check runs it's near zero and TIME_LAND
+      // almost never fires on a normal jump. SOF's `#else` branch has no
+      // such copy, so the real fall speed (a flat jump lands around -270
+      // with this app's CH7_JUMP_VELOCITY) survives untouched into that
+      // check -- which is why it fires on essentially every SOF landing.
+      // This app has no real trace-based PM_StepSlideMove to reproduce that
+      // copy mechanistically (see the dirty-fix comment below for why), so
+      // the SOF toggle gates this check directly instead, matching its real,
+      // observable effect: locked out after nearly every jump in SOF mode,
+      // essentially never locked out in Q2 mode.
+      if (sofToggle.checked && !wasGrounded && velocity[2] < -200) {
+        landTime = velocity[2] < -400 ? 25 : 18;
+      }
+
       // PM_CatagorizePosition's own `#ifdef SOF` dirty-fix (pmove.c:778-781):
       // "if (trace.fraction < 1.0 && trace.ent && pml.velocity[2] < 0)
       // pml.velocity[2] = 0;" -- confirmed present, unconditionally, in both
@@ -589,17 +646,9 @@ function mountCh7Playground(section) {
       // the instant before you touched down. It's a one-frame difference:
       // the very next tick zeroes it either way via the "if (grounded)
       // velocity[2] = 0" line below, once `grounded` catches up. Only
-      // visible by freezing the exact landing frame.
-      //
-      // NOT the same thing as hooks.cpp's "if (_sf_sv_q2_style_jump->value
-      // || _sf_sv_q2_mode->value) pml_velocity[2] = down_v[2];" -- that's a
-      // different line entirely, PM_StepSlideMove's own `#ifndef SOF`
-      // special case (pmove.c:333-335), part of the STEPSIZE stair-stepping
-      // algorithm (try stepping up 18 units, then push back down). This app
-      // has no stairs anywhere, and the wall collision below only ports
-      // PM_StepSlideMove_'s single-bump wall-clip -- never the outer
-      // PM_StepSlideMove that owns that stepping logic -- so that line has
-      // no equivalent here to implement.
+      // visible by freezing the exact landing frame. Runs *after* the
+      // landing-time check above, same order as the real function, so it
+      // never affects whether TIME_LAND triggers.
       if (sofToggle.checked && velocity[2] < 0) velocity[2] = 0;
     }
     const leaveThreshold = sofToggle.checked ? SOF_GROUND_LEAVE_VELOCITY : Q2_GROUND_LEAVE_VELOCITY;

@@ -55,15 +55,50 @@ const SOF_GROUND_LEAVE_VELOCITY = 100;
 const Q2_GROUND_LEAVE_VELOCITY = 180;
 
 // PM_CheckJump, reduced to its actual latch logic (pmove.c:826-871; the
-// PMF_TIME_LAND and water-jump branches are left out -- not modeled here).
+// water-jump branch is left out -- not modeled here, this app has no water).
 // jumpState is a small {held: boolean} the caller owns across ticks.
+//
 // Faithfully reproduces real Quake 2/SoF's jump-buffering quirk: the latch
-// only clears when the key is *released* (not when you leave the ground),
-// so pressing jump while airborne and holding it through touchdown fires
-// the instant you land -- no re-press needed exactly on that frame. Land,
-// keep holding, and it won't jump again until you let go and press once
-// more (usually while still airborne, ready for the next landing).
-function pmCheckJump(jumpState, upmove, grounded) {
+// (PMF_JUMP_HELD) is set the instant a jump fires and only clears when the
+// key is *released* -- not when you leave the ground, not on landing, not
+// on any kind of timer. Concretely: press jump while grounded and hold it
+// down through your whole flight and the landing after -- exactly one jump
+// fires, then nothing, no matter how long you keep holding, because the
+// latch that jump set never got a chance to clear. You have to actually
+// release and press again for the next one. (There *is* a way to get an
+// instant jump on landing without an extra press -- start holding the key
+// while already airborne, before you've triggered a jump of your own that
+// frame; PM_CheckJump's own `if (!grounded) return;` leaves the latch
+// untouched the whole flight in that case, so it's still clear the moment
+// you touch down. But that's a specific setup, not "hold jump and it keeps
+// auto-hopping.")
+//
+// landLocked mirrors `pm->s.pm_flags & PMF_TIME_LAND` -- and it's checked
+// FIRST, before anything else, exactly like the real function:
+//
+//   if (pm->s.pm_flags & PMF_TIME_LAND) return; // hasn't been long enough
+//   if (pm->cmd.upmove < 10) { pm->s.pm_flags &= ~PMF_JUMP_HELD; return; }
+//   ...
+//
+// Checking it before the upmove<10 branch (not after) means JUMP_HELD isn't
+// cleared while locked out either, even on a frame where the key genuinely
+// isn't held -- so a lockout can outlast a single tap and still swallow it.
+//
+// The PM_CheckJump/PM_CatagorizePosition code implementing this flag has no
+// `#ifdef SOF` on it -- but whether it actually *fires* on an ordinary jump
+// is a real SOF-vs-Q2 difference anyway, just sourced from somewhere else
+// entirely: hooks.cpp says so outright, with a comment sitting right above
+// PM_StepSlideMove's Q2-only special case ("This is what causes q2 to not
+// use TIME_JUMP lol"). That special case (pmove.c:333-335) overwrites your
+// vertical velocity with an already-ground-clipped value *before*
+// PM_CatagorizePosition ever checks it, in Q2 only -- SOF has no such copy,
+// so the real fall speed survives into the -200 check. Net effect: this
+// lockout fires on essentially every landing in SOF, almost never in Q2. The
+// caller (ch7-playground.js) is responsible for setting pm_time on a hard
+// landing (pmove.c:761-770: `pm_time = velocity[2] < -400 ? 25 : 18` when
+// velocity[2] < -200) and gates that on the SOF/Q2 toggle to match.
+function pmCheckJump(jumpState, upmove, grounded, landLocked) {
+  if (landLocked) return false;
   if (upmove < 10) {
     jumpState.held = false;
     return false;

@@ -1,6 +1,6 @@
 function mountCh7Recap(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 13 · Recap</div>
+    <div class="chapter-kicker">Chapter 14 · Recap</div>
     <h1>What you just learned</h1>
 
     <p class="lede">Strafe-jumping isn't a bug or "just skill." It's a direct result of a few
@@ -18,6 +18,7 @@ function mountCh7Recap(section) {
         <li>Real SOF and real Quake II's engine code quietly diverge in a dozen small places — landing, walls, stairs, jump stacking — most of it never touching the core accelerate math at all — Ch. 10.</li>
         <li>One of those divergences has teeth: SOF's landing lockout kills classic flat bunny-hopping outright. Only jumping onto rising ground escapes it — Ch. 11.</li>
         <li>Your keybinds set a real diagonal angle before the mouse ever moves — <span class="varname">cl_sidespeed</span> &gt; <span class="varname">cl_forwardspeed</span> widens it, buying passive speed gain further into the run — Ch. 12.</li>
+        <li>Put together: fly each hop near its own optimal turn rate, alternate which side of the target you lead on so the wide arcs cancel sideways, and re-aim during the landing lockout where ground accel does the work 10× faster — Ch. 13.</li>
       </ol>
     </div>
 

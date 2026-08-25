@@ -346,6 +346,19 @@ function mountCh7Playground(section) {
   });
   wrap.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
+  // If focus leaves `wrap` while a key is held (clicking a dropdown,
+  // alt-tabbing), its keyup never reaches this listener and that key would
+  // stay "held" forever -- clearing on every way focus can be lost avoids
+  // a permanently-stuck WASD/jump/crouch key. See Chapter 8's identical fix.
+  function releaseAllKeys() {
+    keys.clear();
+  }
+  wrap.addEventListener("blur", releaseAllKeys);
+  window.addEventListener("blur", releaseAllKeys);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) releaseAllKeys();
+  });
+
   // ---- fullscreen (press F, or the button) ----
   function toggleFullscreen() {
     if (document.fullscreenElement === wrap) {

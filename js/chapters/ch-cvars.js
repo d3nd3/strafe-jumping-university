@@ -7,14 +7,27 @@
 // diagonal's ANGLE (which interacts with Chapter 7's theta_min law) and its
 // MAGNITUDE (which interacts with the wishspeed clamp feeding PM_Accelerate).
 
-// theta_min from Chapter 7: acos(300/v), the minimum turn angle that gains
-// any speed at all at velocity v. Solved the other way here: given a fixed
-// keyboard-diagonal angle, what's the highest chain speed it still clears
-// on its own, with zero mouse input?
-function cvarCrossoverSpeed(angleRad) {
+// theta_min from Chapter 7, generalized: Chapter 7 always fed PM_Accelerate
+// a maxed-out wishspeed (400/400 diagonal, clamped to 300), so it wrote the
+// law as acos(300/v). The real law -- straight out of PM_Accelerate's own
+// addspeed = wishspeed - currentspeed -- is acos(wishspeed/v), for whatever
+// wishspeed YOUR cl_forwardspeed/cl_sidespeed actually produce. Below your
+// own wishspeed, any angle gains (matches Chapter 7 exactly when wishspeed
+// happens to be 300). Verified against pmAccelerateSteps directly: at
+// v=300, wishspeed=212.1 (a 150/150 diagonal), every angle under ~45.0°
+// yields accelspeed EXACTLY 0 -- not reduced, zero -- because addspeed goes
+// negative.
+function cvarThetaMin(v, wishspeed) {
+  if (wishspeed >= v) return 0; // still below your own cap -- any angle gains
+  return Math.acos(wishspeed / v);
+}
+
+// Solve cvarThetaMin(v, wishspeed) = angleRad for v: the highest chain speed
+// a fixed keyboard diagonal still clears on its own, zero mouse input.
+function cvarCrossoverSpeed(angleRad, wishspeed) {
   const c = Math.cos(angleRad);
   if (c <= 0) return Infinity; // angle >= 90 deg never runs out
-  return pm_maxspeed / c;
+  return wishspeed / c;
 }
 
 function cvarAnalyze(fwd, side) {
@@ -22,8 +35,24 @@ function cvarAnalyze(fwd, side) {
   const rawMag = Math.hypot(fwd, side);
   const wishspeed = Math.min(rawMag, pm_maxspeed); // PM_AirMove's clamp, pmove.c:647
   const accelspeed = pm_airaccelerate * CH_FRICTION_FRAMETIME * wishspeed; // pmove.c:430
-  const crossover = cvarCrossoverSpeed(angle);
+  const crossover = cvarCrossoverSpeed(angle, wishspeed);
   return { angle, rawMag, wishspeed, accelspeed, crossover };
+}
+
+// One real tick of PM_Accelerate, isolated: current speed v pointed along
+// +x, wishdir at world angle phiDeg away from it, target wishspeedMag. Used
+// below to show the actual accelspeed PM_Accelerate produces at a few flick
+// angles -- not a formula, the real generator function.
+function cvarOneTickAccel(v, wishspeedMag, phiDeg) {
+  const velocity = [v, 0, 0];
+  const phi = (phiDeg * Math.PI) / 180;
+  const wishdir = [Math.cos(phi), Math.sin(phi), 0];
+  const gen = pmAccelerateSteps(velocity, wishdir, wishspeedMag, pm_airaccelerate, CH_FRICTION_FRAMETIME);
+  let r;
+  do {
+    r = gen.next();
+  } while (!r.done);
+  return r.value.accelspeed;
 }
 
 const CVAR_PRESETS = [
@@ -85,7 +114,8 @@ function mountChCvars(section) {
         <div class="panel-col" style="flex:1 1 420px">
           <canvas class="scene" id="cv-graph" style="height:320px"></canvas>
           <div class="legend">
-            <span><span class="swatch" style="background:#5fb4ff"></span>θ_min(v) — Chapter 7's real minimum turn angle</span>
+            <span><span class="swatch" style="background:#5fb4ff"></span>θ_min(v) at YOUR wishspeed</span>
+            <span><span class="swatch" style="background:rgba(255,255,255,0.35)"></span>θ_min(v) if maxed to 300 (Chapter 7's version)</span>
             <span><span class="swatch" style="background:#eafff2"></span>your current diagonal angle</span>
           </div>
         </div>
@@ -96,49 +126,84 @@ function mountChCvars(section) {
 
     <h2>Why the ratio matters more than you'd think</h2>
     <p class="muted">
-      SOF default (200/160) sits at <b>38.7°</b>. Your config (150/170) sits at <b>48.6°</b>. Chapter 7's
-      <span class="varname">θ_min = acos(300/|velocity|)</span> means the angle you need just to break even
-      <em>grows</em> as you go faster -- so a wider baked-in keyboard angle keeps gaining speed passively
-      long after a narrower one has stalled out and started demanding active mouse-flicking just to keep up.
-      That's the whole "wider, steeper zigzag" feeling: your keys are doing part of Chapter 7's job for you.
+      SOF default (200/160) sits at <b>38.7°</b>, wishspeed <b>256.1</b>. Your config (150/170) sits at
+      <b>48.6°</b>, wishspeed <b>226.7</b>. Chapter 7's <span class="varname">θ_min = acos(300/|velocity|)</span>
+      quietly assumed a maxed-out diagonal (it always fed PM_Accelerate a 400/400 input, clamped to exactly
+      300) -- the real law straight out of <span class="varname">addspeed = wishspeed - currentspeed</span> is
+      <span class="varname">θ_min = acos(wishspeed/|velocity|)</span>, using <em>your</em> wishspeed, not a
+      flat 300. Below your own wishspeed, any angle gains -- so a wider baked-in keyboard angle keeps gaining
+      speed passively long after a narrower one has stalled out and started demanding active mouse-flicking
+      just to keep up. That's the whole "wider, steeper zigzag" feeling: your keys are doing part of
+      Chapter 7's job for you.
     </p>
 
     <h2>Why 150/150 isn't 400/400, even at the same 1:1 ratio</h2>
     <p class="muted">
-      Angle only decides <em>whether</em> you gain. Magnitude decides <em>how much</em>, completely
-      separately. <span class="varname">wishspeed</span> feeds straight into
-      <span class="varname">accelspeed = accel × frametime × wishspeed</span> (pmove.c:430) --
-      so a wishspeed that's stuck under the 300 cap is a strictly weaker push every single tick, angle aside.
+      This section used to claim the difference was a flat, single-tick <span class="varname">accelspeed</span>
+      comparison -- "same angle both times, 400/400 just pushes harder." Re-derived it against real multi-tick
+      play instead of a single snapshot, and that explanation doesn't survive: run both configs at each one's
+      own best turning technique and the raw accelspeed gap barely shows up. What actually moves is
+      <b>θ_min itself</b> -- exactly the law above, just evaluated at a wishspeed that isn't always 300.
     </p>
     <div class="panel">
-      <div class="panel-row" style="gap:24px;flex-wrap:wrap">
-        <div class="panel-col" style="flex:1 1 220px">
-          <div style="font-family:var(--mono);font-size:12px;color:var(--text-dim)">150 / 150</div>
-          <div style="font-size:22px;margin:4px 0">magnitude <span class="varname">${Math.hypot(150,150).toFixed(1)}</span> — never reaches the cap</div>
-          <div class="muted">accelspeed/tick = ${(pm_airaccelerate * CH_FRICTION_FRAMETIME * Math.min(Math.hypot(150,150), pm_maxspeed)).toFixed(3)}</div>
-        </div>
-        <div class="panel-col" style="flex:1 1 220px">
-          <div style="font-family:var(--mono);font-size:12px;color:var(--text-dim)">400 / 400</div>
-          <div style="font-size:22px;margin:4px 0">magnitude <span class="varname">${Math.hypot(400,400).toFixed(1)}</span> — clamped straight to 300</div>
-          <div class="muted">accelspeed/tick = ${(pm_airaccelerate * CH_FRICTION_FRAMETIME * Math.min(Math.hypot(400,400), pm_maxspeed)).toFixed(3)}</div>
-        </div>
+      <p class="muted" style="margin-top:0">
+        Both 150/150 and 400/400 sit at the <em>same</em> 45° diagonal. Starting from a normal 300 u/s run
+        and flicking at various angles, here's what <span class="varname">PM_Accelerate</span> actually
+        hands back each tick -- the real generator function, not a formula:
+      </p>
+      <div class="panel-row" style="gap:0;flex-wrap:wrap">
+        <table class="mono" style="border-collapse:collapse;width:100%;font-size:13px">
+          <thead>
+            <tr style="text-align:right;color:var(--text-dim)">
+              <td style="padding:4px 10px;text-align:left">flick angle from your current heading</td>
+              ${[0, 20, 44, 45, 46, 60, 90].map((a) => `<td style="padding:4px 10px">${a}°</td>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:4px 10px;text-align:left;color:var(--text-dim)">150/150 (wishspeed 212.1)</td>
+              ${[0, 20, 44, 45, 46, 60, 90]
+                .map((a) => `<td style="padding:4px 10px;text-align:right">${cvarOneTickAccel(300, Math.min(Math.hypot(150, 150), pm_maxspeed), a).toFixed(2)}</td>`)
+                .join("")}
+            </tr>
+            <tr>
+              <td style="padding:4px 10px;text-align:left;color:var(--text-dim)">400/400 (wishspeed 300)</td>
+              ${[0, 20, 44, 45, 46, 60, 90]
+                .map((a) => `<td style="padding:4px 10px;text-align:right">${cvarOneTickAccel(300, Math.min(Math.hypot(400, 400), pm_maxspeed), a).toFixed(2)}</td>`)
+                .join("")}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
     <div class="callout">
-      Same 45° angle both times -- clamping <span class="varname">wishvel</span> down to the cap
-      preserves its direction, it just shortens it. What's different is purely the leftover magnitude,
-      and that alone is worth about <b>41%</b> more push per tick at 400/400. Two configs with an
-      identical ratio can still feel completely different if only one of them actually reaches 300.
+      At v=300 -- your ordinary running speed -- 150/150's wishspeed (212.1) is <em>below</em> 300, so
+      <span class="varname">θ_min(300, 212.1) = 45.0°</span>. Every flick under that is <b>exactly zero</b>
+      accelspeed, not smaller: <span class="varname">addspeed = wishspeed - currentspeed</span> goes negative
+      and <span class="varname">PM_Accelerate</span> returns immediately (pmove.c:414). 400/400's wishspeed
+      hits the 300 cap, so its <span class="varname">θ_min</span> is 0° -- any flick at all, however tiny,
+      starts gaining that same instant.
+    </div>
+    <div class="callout good">
+      But that's <em>only</em> a problem once your speed is already above 212.1. Hold the 150/150 diagonal
+      itself the whole time, from a dead stop, zero mouse -- its crossover ceiling (the stat above) works out
+      to almost exactly <b>300 u/s</b>, dead on normal running speed. Passive strafing feels completely
+      normal, because it never has to cross its own dead zone. The two configs only pull apart once a real
+      bhop chain pushes your speed <em>past</em> 300 -- both then need active flicking, but 150/150 needs it
+      a little sooner, and once everyone's flicking, 400/400's per-tick ceiling (3.00 vs 2.12 accelspeed,
+      past 46° in the table above) stays a bit higher too. At ordinary jump speeds, though, "we didn't notice
+      any difference" is exactly what the numbers predict -- there isn't one yet.
     </div>
 
     <div class="mystery">
       <strong>The old "150×2=300" idea, precisely:</strong> that's true for a <em>single</em> axis held
       alone. The instant you hold forward+strafe together, it's the diagonal's hypotenuse that has to
       clear 300, not either axis by itself -- 150/150 only reaches ${Math.hypot(150,150).toFixed(0)}, well
-      under the cap that assumption expected.
+      under the cap that assumption expected. It just doesn't cost you anything until you're already going
+      faster than a normal run.
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 13: recap</a>
+    <a class="next-link" href="#ch-zigzag">Continue → Chapter 13: flying the zig-zag</a>
   `;
 
   const fwdInput = section.querySelector("#cv-fwd");
@@ -175,7 +240,7 @@ function mountChCvars(section) {
     gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function drawGraph(angleDeg) {
+  function drawGraph(angleDeg, wishspeed) {
     resizeGraph();
     const rect = graphCanvas.getBoundingClientRect();
     const w = rect.width, h = rect.height;
@@ -210,13 +275,30 @@ function mountChCvars(section) {
       gctx.fillText(v + "", xOf(v) - 12, h - padB + 16);
     }
 
-    // theta_min(v) curve
+    // reference theta_min(v) curve if you were maxed out to 300 (Chapter 7's
+    // version) -- only worth drawing when it actually differs from yours
+    if (wishspeed < pm_maxspeed - 0.5) {
+      gctx.strokeStyle = "rgba(255,255,255,0.3)";
+      gctx.lineWidth = 1.5;
+      gctx.setLineDash([2, 3]);
+      gctx.beginPath();
+      let s2 = false;
+      for (let v = minV; v <= maxV; v += 2) {
+        const deg = (Math.acos(Math.min(1, pm_maxspeed / v)) * 180) / Math.PI;
+        const x = xOf(v), y = yOf(deg);
+        if (!s2) { gctx.moveTo(x, y); s2 = true; } else gctx.lineTo(x, y);
+      }
+      gctx.stroke();
+      gctx.setLineDash([]);
+    }
+
+    // theta_min(v) curve at YOUR actual wishspeed
     gctx.strokeStyle = "#5fb4ff";
     gctx.lineWidth = 2.5;
     gctx.beginPath();
     let started = false;
     for (let v = minV; v <= maxV; v += 2) {
-      const deg = Math.acos(Math.min(1, pm_maxspeed / v)) * 180 / Math.PI;
+      const deg = (Math.acos(Math.min(1, wishspeed / v)) * 180) / Math.PI;
       const x = xOf(v), y = yOf(deg);
       if (!started) { gctx.moveTo(x, y); started = true; } else gctx.lineTo(x, y);
     }
@@ -263,7 +345,7 @@ function mountChCvars(section) {
         mandatory just to keep climbing.`;
     }
 
-    drawGraph(angleDeg);
+    drawGraph(angleDeg, wishspeed);
   }
 
   fwdInput.addEventListener("input", render);

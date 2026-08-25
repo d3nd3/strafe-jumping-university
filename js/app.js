@@ -11,6 +11,7 @@ const chapters = [
   { id: "ch8-sof-vs-q2", title: "SOF vs. Q2", mount: mountCh8SofVsQ2 },
   { id: "ch-bhop-lockout", title: "Bunny-Hopping", mount: mountChBhopLockout },
   { id: "ch-cvars", title: "cl_forwardspeed & cl_sidespeed", mount: mountChCvars },
+  { id: "ch-zigzag", title: "Flying the Zig-Zag", mount: mountChZigzag },
   { id: "ch7-recap", title: "Recap & Glossary", mount: mountCh7Recap },
 ];
 

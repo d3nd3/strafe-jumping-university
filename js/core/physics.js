@@ -41,7 +41,15 @@ const pm_accelerate = 10;
 // pm_airaccelerate is just SoF's (always-on) air accel scalar, structurally
 // identical in shape to pm_accelerate but ten times weaker.
 const pm_airaccelerate = 1;
-const pm_duckspeed = 100;
+// The leaked source says 100. Retail says 75. The movement constants sit in one
+// contiguous initialized block in SoF.exe at 0x201375f4, in declaration order,
+// and reading it straight off gives: pm_maxspeed 300.0, pm_duckspeed 75.0,
+// pm_accelerate 10.0, pm_airaccelerate 1.0, pm_wateraccelerate 10.0,
+// pm_friction 6.0, pm_waterfriction 1.0, pm_waterspeed 400.0. IDA's own name
+// for the second slot in that block -- taken from the duck branch of
+// PM_AirMove that loads it (0x20053267) -- is pm_maxcrouchspeed. So ducking
+// while grounded caps you at 75, not 100.
+const pm_duckspeed = 75;
 const pm_friction = 6;
 
 // PM_CatagorizePosition's ground-leave velocity check (pmove.c:704-707).

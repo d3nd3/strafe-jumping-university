@@ -390,3 +390,82 @@ void PM_Friction (void)
 }
 `);
 const FRICTION_HIGHLIGHT = [378, 389, 392, 393, 401];
+
+// ---------------------------------------------------------------------------
+// The three steps that run BEFORE pmove.c ever sees your keys. None of these
+// exist in the leaked source -- there is no client and no game DLL in it. Each
+// block below is a C transcription of the shipped machine code, with the real
+// address of every load-bearing line. See js/core/cmdchain.js for the full
+// provenance notes.
+// ---------------------------------------------------------------------------
+
+// --- CL_BaseMove : sof-bin 0x80b8f04 ----------------------------------------
+const C_CL_BASEMOVE = block(1, `
+// client: turn held keys into a movement command
+void CL_BaseMove (usercmd_t *cmd)
+{
+	memset (cmd, 0, sizeof(*cmd));
+	...
+	// +moveright / +moveleft  ->  sidemove
+	cmd->sidemove    += cl_sidespeed->value    * CL_KeyState (&in_moveright);
+	cmd->sidemove    -= cl_sidespeed->value    * CL_KeyState (&in_moveleft);
+
+	// +forward / +back  ->  forwardmove
+	cmd->forwardmove += cl_forwardspeed->value * CL_KeyState (&in_forward);
+	cmd->forwardmove -= cl_forwardspeed->value * CL_KeyState (&in_back);
+
+	// the "run" bit -- read this line twice, it doubles your speed later
+	if ((in_speed.state & 1) != (int)cl_run->value)
+		cmd->buttons |= BUTTON_RUN;   // 0x20
+}
+`);
+const CL_BASEMOVE_HIGHLIGHT = [7, 8, 11, 12, 15, 16];
+
+// --- PAK_WriteDeltaUsercmd : sof-bin 0x80ba99c / SoF.exe 0x20005e3d ---------
+const C_CMD_CLAMP = block(1, `
+// client: pack the command for the wire.  cmd points AT cl.cmds[seq] --
+// these six lines edit the client's own stored command, not a copy.
+void PAK_WriteDeltaUsercmd (OutPacket &pak, const usercmd_t *from, usercmd_t *cmd)
+{
+	... angles packed to 12 bits each ...
+
+	if (cmd->forwardmove <= -201)  cmd->forwardmove = -200;
+	if (cmd->forwardmove >   200)  cmd->forwardmove =  200;
+
+	if (cmd->sidemove    <= -161)  cmd->sidemove    = -160;
+	if (cmd->sidemove    >   160)  cmd->sidemove    =  160;
+
+	if (cmd->upmove      <= -201)  cmd->upmove      = -200;
+	if (cmd->upmove      >   200)  cmd->upmove      =  200;
+
+	... each packed into 10 bits, biased by +510 ...
+}
+// PAK_ReadDeltaUsercmd (0x80ba5bc) repeats all six lines on the server.
+`);
+const CMD_CLAMP_HIGHLIGHT = [7, 8, 10, 11];
+
+// --- ClientThink : gamex86 0x500f53a0 ---------------------------------------
+const C_CLIENT_THINK = block(1, `
+// server: the last thing done to your command before Pmove() runs
+void ClientThink (edict_t *ent, usercmd_t *ucmd)
+{
+	...
+	pm.cmd = *ucmd;
+
+	if ((pm.cmd.buttons & BUTTON_RUN) && !(client->ps.pmove.pm_flags & 0x40))
+	{
+		pm.cmd.forwardmove *= 2;
+		pm.cmd.sidemove    *= 2;
+		pm.cmd.upmove      *= 2;
+	}
+
+	scale = (byte)(GetSpeedScale (ent) * 255.0) * (1.0f / 255.0f);
+	pm.cmd.forwardmove = (int)(pm.cmd.forwardmove * scale);
+	pm.cmd.sidemove    = (int)(pm.cmd.sidemove    * scale);
+
+	gi.pmove (&pm);          // <- pmove.c finally starts here
+	...
+}
+// CL_PredictMovement (sof-bin 0x80cefa0) runs these same lines client-side.
+`);
+const CLIENT_THINK_HIGHLIGHT = [7, 9, 10, 14, 15, 16, 18];

@@ -64,6 +64,23 @@ pml_t		pml;
 
 
 // movement parameters
+//
+// TWO of these initializers disagree with the shipped game. In SoF.exe the
+// whole block sits contiguous and initialized at 0x201375f4, in this exact
+// declaration order, and reads: 300.0, 75.0, 10.0, 1.0, 10.0, 6.0, 1.0, 400.0
+// (pm_stopspeed lives elsewhere). The Linux sof-bin ELF agrees -- pm_maxspeed
+// resolves to 0x82948e4 and pm_airaccelerate to 0x82948f0, which holds
+// 3F800000h = 1.0. So:
+//   pm_duckspeed     retail 75, not 100.  IDA's own name for that slot, taken
+//                    from the duck branch of PM_AirMove that loads it
+//                    (SoF.exe 0x20053267), is pm_maxcrouchspeed.
+//   pm_airaccelerate retail 1, not 0 -- and it is never written anywhere else,
+//                    so the `if (pm_airaccelerate)` test at the bottom of
+//                    PM_AirMove is not a live branch in the shipped game. See
+//                    the note down there: retail's compiled airborne path has
+//                    no branch at all and no PM_AirAccelerate, it just runs
+//                    this file's PM_Accelerate with accel = pm_airaccelerate.
+//                    Same behavior as the `else` arm below, different shape.
 float	pm_stopspeed = 100;
 float	pm_maxspeed = 300;
 float	pm_duckspeed = 100;
@@ -609,9 +626,42 @@ void PM_AirMove (void)
 	float		wishspeed;
 	float		maxspeed;
 
+	// These two are NOT cl_forwardspeed / cl_sidespeed, however much they look
+	// like it. Three steps run before Pmove() is ever called, none of them in
+	// this leak (it has no client and no game DLL). Read out of the binaries:
+	//
+	//   1. CL_BaseMove           sof-bin 0x80b8f04
+	//        forwardmove = (short)(int)(cl_forwardspeed * keyFraction)
+	//        sidemove    = (short)(int)(cl_sidespeed    * keyFraction)
+	//        ... and sets cmd->buttons |= 0x20 for "run" (cl_run / +speed).
+	//
+	//   2. PAK_WriteDeltaUsercmd sof-bin 0x80ba99c, SoF.exe 0x20005e3d
+	//        forwardmove clamped to [-200, 200]
+	//        sidemove    clamped to [-160, 160]   <- NOT the same cap
+	//        upmove      clamped to [-200, 200]
+	//      Written back through the pointer into cl.cmds[] itself, so the
+	//      client's own prediction (CL_PredictMovement, 0x80cefa0) replays the
+	//      clamped values; PAK_ReadDeltaUsercmd (0x80ba5bc) repeats all six
+	//      lines server-side. The unclamped Quake 2 MSG_WriteDeltaUsercmd is
+	//      still linked in but has zero callers.
+	//
+	//   3. ClientThink           gamex86 0x500f53a0
+	//        if ((buttons & 0x20) && !(ps.pmove.pm_flags & 0x40))
+	//            forwardmove *= 2, sidemove *= 2, upmove *= 2;
+	//        scale = (byte)(GetSpeedScale(ent) * 255.0) * (1/255.0);
+	//        forwardmove = (int)(forwardmove * scale);
+	//        sidemove    = (int)(sidemove    * scale);   // upmove not scaled
+	//
+	// Net effect, running, healthy:
+	//        fmove = 2 * min(cl_forwardspeed, 200)
+	//        smove = 2 * min(cl_sidespeed,    160)
+	// which for any config with cl_forwardspeed^2 + cl_sidespeed^2 >= 150^2
+	// overshoots the pm_maxspeed clamp below -- so wishspeed comes out of this
+	// function as a flat 300 no matter what you typed, and the only thing the
+	// two cvars still control is atan2(smove, fmove), the direction.
 	fmove = pm->cmd.forwardmove;
 	smove = pm->cmd.sidemove;
-	
+
 //!!!!! pitch should be 1/3 so this isn't needed??!
 #ifdef SOF
 	pml.forward[2] = 0;

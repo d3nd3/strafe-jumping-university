@@ -284,3 +284,15 @@ footer.chapter-foot { text-align: center; color: var(--text-dim); font-size: 12.
   main, footer.chapter-foot { margin-left: 0; }
   .chapter { padding: 40px 20px 60px; }
 }
+
+/* Chapter 12: the cvar trim table + the boxed formula */
+.cvar-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.cvar-table thead td { color: var(--text-dim); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.04em; padding: 6px 10px; text-align: right; border-bottom: 1px solid var(--border); }
+.cvar-table td { padding: 6px 10px; text-align: right; }
+.cvar-table td.l, .cvar-table thead td.l { text-align: left; }
+.cvar-table tbody tr + tr td { border-top: 1px solid rgba(255,255,255,0.05); }
+.cvar-table td.hot { color: var(--amber); }
+.formula { font-family: var(--mono); font-size: 15px; line-height: 1.9; color: var(--text);
+  background: var(--bg-raised); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px 20px; margin-bottom: 14px; overflow-x: auto; }

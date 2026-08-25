@@ -338,3 +338,44 @@ function* pmAirMoveSteps(state, cmd, frametime) {
 
   return { wishdir, wishspeed, ...accelResult };
 }
+
+// ---------------------------------------------------------------------------
+// PM_SnapPosition's velocity write, plus the matching read-back at the top of
+// the *next* Pmove() call -- decompiled straight out of both retail binaries
+// (SoF.exe and the Linux sof-bin ELF; the ELF's Hex-Rays output spells it out
+// unambiguously):
+//
+//   *(short*)(pm->s.velocity + 0) = (int)(pml.velocity[0] * 8.0);
+//   *(short*)(pm->s.velocity + 1) = (int)(pml.velocity[1] * 8.0);
+//   *(short*)(pm->s.velocity + 2) = (int)(pml.velocity[2] * 8.0);
+//   // ... next tick's Pmove() then does:
+//   pml.velocity[i] = pm->s.velocity[i] * 0.125;
+//
+// pmove_state_t.velocity is a `short[3]` -- this is the actual network wire
+// format (and the client/server's only copy of velocity between ticks), not
+// a display-only rounding step. Two things fall out of that:
+//   1. velocity is quantized to steps of 0.125 u/s (1/8, matching the *8/
+//      0.125 pair above) every single tick, not just when it crosses the
+//      network.
+//   2. a `short` tops out at 32767 -> divided by 8, that's a hard ceiling of
+//      4095.875 u/s *per axis* (4096 down to -4096). Cross it and the store
+//      doesn't clamp -- it truncates to 16 bits and wraps, so the velocity
+//      you read back next tick is essentially garbage (often near-zero or
+//      flipped in sign), not a smoothly capped value.
+//
+// This is the *only* velocity limit that exists anywhere in real SoF's
+// movement code: decompiling the full Pmove() function top to bottom shows
+// no sv_maxvelocity-style cvar and no SV_CheckVelocity-style clamp function
+// at all (confirmed absent from both binaries) between PM_AirMove and this
+// snap. It's why speed can't actually grow forever in the real game the way
+// it can in this app's simulators without this function: every single tick
+// is a round trip through a 16-bit short, and blowing through it corrupts
+// your velocity rather than politely refusing to go faster.
+// ---------------------------------------------------------------------------
+function pmSnapVelocity(velocity) {
+  for (let i = 0; i < 3; i++) {
+    const raw = Math.trunc(velocity[i] * 8); // (int)(pml.velocity[i] * 8.0)
+    const asShort = (raw << 16) >> 16; // stored into a 16-bit short -- wraps outside [-32768, 32767]
+    velocity[i] = asShort * 0.125; // next tick's pml.velocity[i] = pm->s.velocity[i] * 0.125
+  }
+}

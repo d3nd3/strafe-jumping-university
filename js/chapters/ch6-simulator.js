@@ -155,6 +155,14 @@ function mountCh6Simulator(section) {
     };
 
     pos = [pos[0] + state.velocity[0] * CH6_FRAMETIME, pos[1] + state.velocity[1] * CH6_FRAMETIME];
+
+    // PM_SnapPosition's real velocity round-trip through a 16-bit short (see
+    // physics.js) -- this tick's movement above already used the full-float
+    // velocity (matches the real client: PM_StepSlideMove moves you before
+    // PM_SnapPosition ever quantizes anything), so this only affects what
+    // carries into the *next* tick, exactly like the real game.
+    pmSnapVelocity(state.velocity);
+
     trail.push([...pos]);
     if (trail.length > CH6_TRAIL_MAX) trail.shift();
     const speed = VectorLength(state.velocity);

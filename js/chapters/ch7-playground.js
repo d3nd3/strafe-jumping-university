@@ -605,6 +605,14 @@ function mountCh7Playground(section) {
     const leaveThreshold = sofToggle.checked ? SOF_GROUND_LEAVE_VELOCITY : Q2_GROUND_LEAVE_VELOCITY;
     grounded = touching && velocity[2] <= leaveThreshold;
 
+    // PM_SnapPosition's real velocity round-trip through a 16-bit short (see
+    // physics.js) -- runs last, same place it runs in real Pmove(), after
+    // this tick's own movement already used the full-float velocity. Sustain
+    // enough speed on one axis (~4096 u/s) and this is what actually stops
+    // you: not a clamp, a network-quantization wraparound that corrupts your
+    // velocity, exactly like the real game.
+    pmSnapVelocity(velocity);
+
     trailPts.push([...position]);
     if (trailPts.length > trailMaxPoints) trailPts.shift();
   }

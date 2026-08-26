@@ -20,13 +20,11 @@ function mountCh6Simulator(section) {
     keyboard (or mouse). No gravity or ground on purpose — just the pure steering trick.</p>
 
     <div class="callout">
-      <b>What you're looking at:</b> a bird's-eye view, and the camera always faces the way
-      <em>you're</em> facing — so on screen, "up" always means "wherever you're currently looking."
-      That means turning spins the whole world around you, not the other way around. The faint
-      yellow spokes are fixed compass directions in the world, so you can actually <em>see</em> that
-      spin happen instead of just taking it on faith — watch the labeled <span class="varname">0°</span>
-      spoke sweep as you turn. The ring around you glows green exactly when this instant is adding
-      speed; the trail behind you is everywhere you've already been.
+      <b>What you're looking at:</b> a bird's-eye view where "up" always means "wherever you're
+      currently looking" — so turning spins the world around you, not the other way around. The
+      faint yellow spokes are fixed compass directions; watch the labeled <span class="varname">0°</span>
+      spoke sweep as you turn to see that spin for yourself. The ring around you glows green when
+      you're gaining speed; the trail is everywhere you've already been.
     </div>
 
     <div class="panel">
@@ -99,13 +97,13 @@ function mountCh6Simulator(section) {
     </div>
 
     <div class="callout">
-      Why is <b>client frame rate</b> a movement setting at all? Because the real client calls the
-      exact function you're stepping through here once per rendered frame, using that frame's real
-      duration as <span class="varname">frametime</span>. More frames per real second means more,
-      smaller boost applications, each re-measuring your turn angle sooner — which is a real
-      advantage while circle-strafing, not a display trick. That's why competitive SoF players
-      have historically locked their client to specific rates like 142fps (≈7ms frames) instead of
-      just letting it run as fast as their monitor allows.
+      Why is <b>client frame rate</b> a movement setting? Because the real client calls this exact
+      function once per rendered frame, using that frame's duration as
+      <span class="varname">frametime</span>. More frames per second means more, smaller boost
+      applications, each re-measuring your turn angle sooner — a genuine circle-strafing
+      advantage, not a display trick. That's why competitive SoF players have historically locked
+      their client to rates like 142fps (≈7ms frames) instead of running as fast as their monitor
+      allows.
     </div>
 
     <div id="sim-debugger-wrap" style="display:none">

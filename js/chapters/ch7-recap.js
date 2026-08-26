@@ -1,6 +1,6 @@
 function mountCh7Recap(section) {
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 14 · Recap</div>
+    <div class="chapter-kicker">Chapter 15 · Recap</div>
     <h1>What you just learned</h1>
 
     <p class="lede">Strafe-jumping isn't a bug or "just skill." It's a direct result of a few
@@ -18,7 +18,8 @@ function mountCh7Recap(section) {
         <li>Real SOF and real Quake II's engine code quietly diverge in fifteen places — landing, walls, stairs, jump stacking — plus three big ones outside <code>pmove.c</code> entirely, in the client and game DLL the leak doesn't contain — Ch. 10.</li>
         <li>One of those divergences has teeth: SOF's landing lockout kills classic flat bunny-hopping outright. Only jumping onto rising ground escapes it — and its countdown is measured in 8&nbsp;ms units, so above 125&nbsp;fps it gets shorter the faster you run — Ch. 11.</li>
         <li>Your two movement cvars don't set a speed at all — the client shrinks the diagonal, trims each axis at a different limit, and doubles the result, so the push saturates at 300 for every sane config and only the <b>angle</b> survives. A wider angle puts your crosshair nearer your actual route, which is the whole benefit — Ch. 12.</li>
-        <li>Put together: fly each hop near its own optimal turn rate, alternate which side of the target you lead on so the wide arcs cancel sideways, and re-aim during the landing lockout where ground accel does the work 10× faster — Ch. 13.</li>
+        <li>None of it actually needs a jump. Tap left–right–left–right with forward held and your route stays straight while the push stays ~40° off it, so the limit never catches up: ${GS_BEST.speed.toFixed(0)} u/s on flat ground, mouse untouched — Ch. 13.</li>
+        <li>Put together: fly each hop near its own optimal turn rate, alternate which side of the target you lead on so the wide arcs cancel sideways, and re-aim during the landing lockout where ground accel does the work 10× faster — Ch. 14.</li>
       </ol>
     </div>
 
@@ -38,6 +39,7 @@ function mountCh7Recap(section) {
       <dt>forward input <span class="varname">cl_forwardspeed</span></dt><dd>Starting point for <span class="varname">forwardmove</span> while W is held — trimmed at 200, then doubled for running. Must be 150 or more or you cap your own straight-line speed.</dd>
       <dt>strafe input <span class="varname">cl_sidespeed</span></dt><dd>Same for <span class="varname">sidemove</span> while A/D is held, but trimmed at <b>160</b>, not 200. That mismatch is the entire reason the two numbers set an angle.</dd>
       <dt>key angle <span class="varname">atan2(sidemove, forwardmove)</span></dt><dd>The fixed gap between where your crosshair points and where your keys push. Your config picks it once; the mouse can't change it.</dd>
+      <dt>ground strafing <span class="varname">alternating sidemove</span></dt><dd>Tapping left and right on alternate ticks with forward held. Each tap cancels the last one's sideways drift, so your route stays straight while the push stays off to one side of it — and the limit is measured against the push, not against your route.</dd>
       <dt>the cliff <span class="varname">addspeed &lt;= 0</span></dt><dd>Push any closer to your direction of travel than <span class="varname">acos(wishspeed / speed)</span> and the boost function returns having done nothing at all. Not less speed — none.</dd>
     </dl>
 

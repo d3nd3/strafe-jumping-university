@@ -220,9 +220,9 @@ const BINARY_VS_SOURCE_DIFFS = [
     title: "There's no separate, gentler air-acceleration formula",
     cite: "pmove.c:694–697 · PM_AirMove (no #ifdef SOF at all — retail binary diverges from the shared leaked source)",
     summary:
-      "The leaked source's airborne branch tests <span class=\"varname\">pm_airaccelerate</span> as a boolean and, when it's set, calls a whole separate function — <span class=\"varname\">PM_AirAccelerate</span> — that caps the wishspeed used for the addspeed comparison at 30 u/s: a gentler, more skill-rewarding curve. Retail SoF.exe's compiled PM_AirMove has no such test. It reads <span class=\"varname\">pm_airaccelerate</span> once as a plain multiplicand into the ordinary accelerate formula, exactly the way the ground branch reads <span class=\"varname\">pm_accelerate</span> — and the shipped value is <b>1.0</b>, not the 0 the leaked source declares.",
+      "The leaked source treats <span class=\"varname\">pm_airaccelerate</span> as a boolean: if set, it calls a separate function, <span class=\"varname\">PM_AirAccelerate</span>, that caps the wishspeed used in the addspeed comparison at 30 u/s — a gentler curve. Retail SoF.exe's compiled PM_AirMove has no such branch: it reads <span class=\"varname\">pm_airaccelerate</span> once, as a plain multiplicand in the ordinary accelerate formula, the same way the ground branch reads <span class=\"varname\">pm_accelerate</span>. The shipped value is <b>1.0</b>, not the leaked source's declared 0.",
     impact:
-      "Nothing changes in felt behavior, and that's the point: a stock Q2 server leaves <span class=\"varname\">pm_airaccelerate</span> at 0, takes the <code>else</code> arm, and accelerates with a flat 1 — numerically identical to what SOF does unconditionally. The difference is structural. Q2 keeps a second, gentler air formula compiled in and reachable; SOF's binary has no second formula at all, so the 30-unit-capped curve simply doesn't exist in the game and no server setting could summon it.",
+      "Felt behavior doesn't change — a stock Q2 server leaves <span class=\"varname\">pm_airaccelerate</span> at 0, takes the <code>else</code> arm, and accelerates with a flat 1, numerically identical to SOF. The difference is structural: Q2 keeps a second, gentler air formula compiled in and reachable; SOF's binary has no second formula at all, so the 30-unit cap doesn't exist and no server setting could summon it.",
     corroboration:
       "Confirmed by decompiling PM_AirMove out of both SoF.exe and the Linux sof-bin ELF: no 30.0 constant, no second accelerate-shaped function, no runtime branch on any accel value. The tell is that <span class=\"varname\">addspeed</span> is computed exactly once, from the uncapped wishspeed, <i>before</i> the ladder/ground/air branch even starts, then reused unchanged inside the air branch — an inlined PM_AirAccelerate could not have lost its cap without changing behavior. The 1.0 itself is readable at sof-bin 0x82948f0 (3F800000h) and SoF.exe 0x20137600.",
     sofLabel: "SOF (compiled binary)",
@@ -277,15 +277,14 @@ function mountCh8SofVsQ2(section) {
     <p class="lede">
       SOF's engine is a licensed fork of Quake II. Its leaked <code>pmove.c</code> still carries
       <code>#ifdef SOF</code> / <code>#else</code> branches marking exactly where Raven's
-      engineers changed the shared movement code — and a community project that hooks the real
-      retail binary (<code>sofree</code>) independently exposes three of these as server cvars
+      engineers changed the shared movement code, and a community project that hooks the retail
+      binary (<code>sofree</code>) independently exposes three of these as server cvars
       (<code>_sf_sv_q2_mode</code>, <code>_sf_sv_q2_style_jump</code>,
-      <code>_sf_sv_q2_slide_fix</code>) you can toggle to switch a live SOF server back to Q2
-      behavior. Every item below is confirmed by at least one of: the source's own branch, a
-      hooks.cpp cvar, or disassembling the retail binaries directly — and that last category
-      catches a couple of real differences the <code>#ifdef</code> branches don't mark at all,
-      because the leaked source treats that code as identical for both engines and only the
-      compiled binary disagrees with it.
+      <code>_sf_sv_q2_slide_fix</code>) you can toggle live. Every item below is confirmed by the
+      source's own branch, a hooks.cpp cvar, or disassembly of the retail binaries — the last of
+      which catches real differences no <code>#ifdef</code> marks at all, because the leaked
+      source treats that code as identical for both engines and only the compiled binary
+      disagrees.
     </p>
 
     <h2>Real SOF-only behavior</h2>

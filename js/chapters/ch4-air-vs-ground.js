@@ -64,9 +64,9 @@ function mountCh4AirVsGround(section) {
 
     <div class="mystery">
       <strong>So how does air-strafing work at all?</strong> Weak boost only limits how fast you
-      catch up <em>in the target direction</em>. It says nothing about speed you already have
-      sideways to that. Chapter 7 turns the target direction away from straight-ahead and shows
-      what that sideways speed does.
+      catch up <em>in the target direction</em> — it says nothing about speed you already have
+      sideways to that. Chapter 7 aims the target direction away from straight-ahead and shows
+      what that sideways speed buys you.
     </div>
 
     <a class="next-link" href="#ch-friction">Continue → Chapter 6: friction</a>

@@ -66,7 +66,7 @@ function mountChZigzag(section) {
   }
 
   section.innerHTML = `
-    <div class="chapter-kicker">Chapter 13 · Flying the Zig-Zag</div>
+    <div class="chapter-kicker">Chapter 14 · Flying the Zig-Zag</div>
     <h1>Getting from A to B, as fast as the engine allows</h1>
     <p class="lede">
       Everything so far has been "here's what one number does." This is the payoff: given all of
@@ -109,25 +109,22 @@ function mountChZigzag(section) {
 
     <h2>② Alternate which side you lead on, so the arcs cancel</h2>
     <p class="muted">
-      Since no single hop points at the target, aim the <em>whole arc</em> at it instead: start hop
-      1 biased left of your true bearing to your target and let its ${headingSwept.toFixed(0)}°
-      sweep carry you back across it, then start hop 2 biased right by the same amount and let it
-      sweep back. Two hops, opposite bias, same magnitude -- the sideways halves cancel and what's
-      left is forward progress at close to each hop's own best speed, not a compromise angle that's
-      optimal for neither.
+      Since no single hop points straight at the target, aim the <em>whole arc</em> at it instead:
+      bias hop 1 left of your true bearing and let its ${headingSwept.toFixed(0)}° sweep carry you
+      back across it, then bias hop 2 right by the same amount. Opposite bias, same magnitude — the
+      sideways halves cancel, leaving forward progress at close to each hop's own best speed instead
+      of a compromise angle that's optimal for neither.
     </p>
 
     <h2>③ The landing lockout isn't dead time -- use it to re-aim</h2>
     <p class="muted">
-      Chapter 11 already showed a flat landing (${flatLandV.toFixed(0)} u/s vertical) always trips
-      <span class="varname">PMF_TIME_LAND</span>: <b>pm_time ${flatLockPmTime}</b>, which at the
-      100 fps this course simulates is ${flatLockTicks} ticks
-      (${lockSeconds.toFixed(3)}s) where <span class="varname">PM_CheckJump</span> refuses to fire,
-      no way around it on flat ground. But you're still standing on the ground for those ticks, and
-      ground accel is <b>10×</b> air accel (Chapter 5). Re-aiming your view right as you land, so
-      those ${flatLockTicks} locked-out ticks are spent turning on the ground instead of standing
-      there waiting, reorients your velocity far faster than trying to do the same turn once you're
-      airborne again:
+      Chapter 11 showed a flat landing (${flatLandV.toFixed(0)} u/s vertical) always trips
+      <span class="varname">PMF_TIME_LAND</span> — <b>pm_time ${flatLockPmTime}</b>, or
+      ${flatLockTicks} ticks (${lockSeconds.toFixed(3)}s) at this course's 100 fps, during which
+      <span class="varname">PM_CheckJump</span> refuses to fire. There's no avoiding it on flat
+      ground. But you're still standing during those ticks, and ground accel is <b>10×</b> air accel
+      (Chapter 5) — so re-aiming the instant you land turns those locked-out ticks into free
+      reorientation, faster than making the same turn once you're airborne again:
     </p>
     <div class="panel">
       <div class="panel-row" style="gap:0;flex-wrap:wrap">
@@ -186,6 +183,6 @@ function mountChZigzag(section) {
       = ${cycleSeconds.toFixed(2)}s</span> -- that's the real, physics-floor number to beat.
     </div>
 
-    <a class="next-link" href="#ch7-recap">Continue → Chapter 14: recap</a>
+    <a class="next-link" href="#ch7-recap">Continue → Chapter 15: recap</a>
   `;
 }

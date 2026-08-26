@@ -14,12 +14,11 @@ function mountCh1Hook(section) {
         <div class="panel-col">
           <canvas class="scene" id="hook-canvas"></canvas>
           <p class="muted" style="font-size:13px;margin-top:8px">
-            <b>What you're looking at:</b> a bird's-eye view of one player, flying <em>one</em>
-            jump — 0.7 seconds of real air time, then a reset. The dot is them; the line is the
-            path they just flew. This is real, running physics, not a decoration: the same
-            <span class="varname">PM_AirMove</span> code every later chapter steps through, fed the
-            largest movement command the game can actually produce (400 forward, 320 sideways —
-            Chapter 12 explains why those two numbers differ).
+            <b>What you're looking at:</b> one player, bird's-eye, flying <em>one</em> jump — 0.7s
+            of air time, then a reset. The dot is them; the line is the path they flew. This runs
+            real physics — the same <span class="varname">PM_AirMove</span> code every later
+            chapter steps through, fed the largest movement command the game can produce (400
+            forward, 320 sideways — Chapter 12 explains the gap).
           </p>
         </div>
         <div class="panel-col">

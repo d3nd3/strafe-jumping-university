@@ -502,21 +502,24 @@ function mountChCvars(section) {
       forever. Both are worth looking at; only one of them is a game.
     </p>
     <div class="callout">
-      <b>The crosshair angle on that dial is not a per-tick delta.</b> It is an absolute angle at an
-      instant — where your view sits relative to where you're going. But your velocity rotates
-      underneath you as you accelerate, so <em>holding</em> that angle takes a steady mouse turn,
-      and that turn rate is the thing the dial never showed. It's small:
+      <b>The crosshair angle on that dial is a snapshot, not a plan.</b> It's where your view
+      sits at one instant. Your velocity rotates underneath you as you accelerate, so holding
+      that angle means turning your mouse to match it, every tick — call that
+      <b>tracking</b>. The alternative is <b>freezing</b>: pick one angle before you leave the
+      ground and never touch the mouse again until you land. This chapter is about the gap
+      between those two.
+      <br /><br />
+      The turn tracking needs is small —
       <b>${(chainTrackRate(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
             chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME)) * DEG / CVAR_FRAMETIME).toFixed(1)}°/s</b>
-      at 600 u/s, dropping to
-      <b>${(chainTrackRate(1000, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
+      at 600 u/s, <b>${(chainTrackRate(1000, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
             chainBestAngle(1000, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME)) * DEG / CVAR_FRAMETIME).toFixed(1)}°/s</b>
-      at 1000. And that turn is not cosmetic — <b>turning is the entire mechanism</b>. Look at
-      <span class="varname">addspeed = wishspeed − currentspeed</span> again: freeze your yaw and
-      <span class="varname">wishdir</span> is fixed in the world, so nothing on earth refills
-      <span class="varname">addspeed</span> except your own acceleration eating it. Turn, and you
-      point <span class="varname">wishdir</span> somewhere your velocity hasn't reached yet, which
-      re-opens it. Every tick.
+      at 1000 — but it's not cosmetic, it's the whole mechanism.
+      <span class="varname">addspeed = wishspeed − currentspeed</span> only refills when
+      <span class="varname">wishdir</span> points somewhere your velocity hasn't caught up to
+      yet. Freeze your yaw and <span class="varname">wishdir</span> is fixed in the world, so
+      your own acceleration burns <span class="varname">addspeed</span> down and nothing
+      refills it. Track, and every turn re-opens it.
     </div>
 
     <div class="panel">
@@ -591,8 +594,10 @@ function mountChCvars(section) {
 
     <div class="callout good" id="cv-jump-note">—</div>
 
-    <div class="mystery">
-      <b>So no — you cannot flick once and coast, and the reason is sharper than it looks.</b>
+    <details class="mystery">
+      <summary><b>So no — you cannot flick once and coast, and the reason is sharper than it
+      looks.</b> <span class="spoiler-hint">(click to expand)</span></summary>
+      <div class="spoiler-body">
       The lower chart is the whole story: <span class="varname">currentspeed</span> is your velocity
       projected onto <span class="varname">wishdir</span>, and with a frozen yaw it climbs by exactly
       <span class="varname">accelspeed</span> — <b>${(pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed).toFixed(0)} u/s</b>
@@ -624,7 +629,8 @@ function mountChCvars(section) {
       wider</b> than the one-tick answer. That is where "aim wider than feels right" really comes
       from: not from being kind about your aim, but because a human mouse is closer to frozen than
       to tracking, and the frozen optimum is a long way out.
-    </div>
+      </div>
+    </details>
 
     <div class="panel">
       <table class="cvar-table mono" id="cv-freeze-table">
@@ -635,8 +641,11 @@ function mountChCvars(section) {
       </table>
     </div>
 
-    <div class="callout">
-      <b>And your last question is the one that actually decides a run.</b> Look at the right-hand
+    <details class="callout">
+      <summary><b>And your last question is the one that actually decides a run.</b>
+      <span class="spoiler-hint">(click to expand)</span></summary>
+      <div class="spoiler-body">
+      Look at the right-hand
       column. Tracking and a well-chosen frozen aim swing your route by
       <em>almost the same amount</em> over a jump — so freezing does not buy you a straighter line
       into the next one, it just costs you speed. Where the frozen aim does buy something is
@@ -652,7 +661,8 @@ function mountChCvars(section) {
       })()} of the gain and tells you exactly where you'll be pointing. Neither is "the" answer —
       which is why the strongest players track hard through the middle of a flight and let the aim
       settle before the landing.
-    </div>
+      </div>
+    </details>
 
     ${(() => {
       const base = {
@@ -665,8 +675,10 @@ function mountChCvars(section) {
       const tick1 = T({ airMode: "freeze", freezeAngle: chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) });
       const holdW = T({ airMode: "track", groundStrafe: false });
       return `
-    <div class="mystery">
-      <b>Now tick the ground back on, because it reorders everything this chapter just told you.</b>
+    <details class="mystery">
+      <summary><b>Now tick the ground back on, because it reorders everything this chapter just
+      told you.</b> <span class="spoiler-hint">(click to expand)</span></summary>
+      <div class="spoiler-body">
       On flat ground the air technique stops mattering very much. Perfect tracking settles at
       <b>${track.toFixed(1)}</b>. A well-chosen frozen aim settles at <b>${froz.toFixed(1)}</b>.
       Frozen on the one-tick best angle — the setting that was worth a catastrophic <em>one useful
@@ -691,7 +703,8 @@ function mountChCvars(section) {
       chapter is about</b>. The angle work pays where the ground stops interrupting: ramps, drops,
       long flights, and any route where you spend more time airborne than grounded. That is not a
       reason to skip it. It is a reason to know which one you're being limited by.
-    </div>`;
+      </div>
+    </details>`;
     })()}
 
     <h2>So why is sideways-bigger-than-forward genuinely better?</h2>
@@ -741,7 +754,7 @@ function mountChCvars(section) {
       wider than feels right" is universal advice.
     </div>
 
-    <a class="next-link" href="#ch-zigzag">Continue → Chapter 13: flying the zig-zag</a>
+    <a class="next-link" href="#ch-groundstrafe">Continue → Chapter 13: running without jumping</a>
   `;
 
   const fwdInput = section.querySelector("#cv-fwd");

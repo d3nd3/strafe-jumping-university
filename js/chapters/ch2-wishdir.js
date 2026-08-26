@@ -40,9 +40,9 @@ function mountCh2Wishdir(section) {
     </div>
 
     <p class="muted">
-      "Forward" and "right" only depend on where you're looking — not on how you're actually
-      moving. Add them together, weighted by your keys, and clamp the result to top speed (300):
-      that's your target direction and target speed. Chapter 4 shows what happens to them next.
+      "Forward" and "right" depend only on where you're looking, not on how you're moving. Weight
+      them by your keys, add, and clamp to top speed (300) — that's your target direction and
+      target speed. Chapter 4 shows what happens to them next.
     </p>
     <div class="callout">
       Try holding both forward and strafe keys (W+D). Push the forward slider to 400 and the

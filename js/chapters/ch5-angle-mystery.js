@@ -87,10 +87,10 @@ function mountCh5AngleMystery(section) {
 
     <div class="callout good">
       <b>This is a real SOF jump, not an arbitrary flight:</b> liftoff at
-      <span class="varname">270 u/s</span> vertical — PM_CheckJump's actual, confirmed retail
-      value — with gravity at <span class="varname">800 u/s²</span> pulling you back down, the same
-      two numbers Chapter 9's 3D playground uses. Airtime isn't a knob you set anymore; it falls
-      straight out of that physics, driven by how far below or above your takeoff point you land.
+      <span class="varname">270 u/s</span> vertical (PM_CheckJump's confirmed retail value)
+      against <span class="varname">800 u/s²</span> gravity — the same numbers Chapter 9's 3D
+      playground uses. Airtime isn't a knob anymore; it falls out of that physics and how far
+      above or below your takeoff point you land.
     </div>
 
     <div class="panel">

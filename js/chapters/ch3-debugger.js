@@ -136,14 +136,13 @@ function mountCh3Debugger(section) {
 
     <h2>Section 3 — PM_AirAccelerate: real Quake 2 code, not SoF's own</h2>
     <p class="muted">
-      id's public <span class="varname">pmove.c</span> has a second boost function for the air,
-      with a gentler 30-unit cap, gated behind <span class="varname">pm_airaccelerate</span>. But
-      decompiling retail <span class="varname">SoF.exe</span> (and a Linux build, cross-checked)
-      shows no such branch at all — just one boost computation, with
-      <span class="varname">pm_airaccelerate</span> hardcoded to <b>1</b> as its strength. The
-      30-unit cap formula isn't in the compiled code anywhere. SoF's own
-      <span class="varname">PM_AirMove</span> was written without this function — it's real code,
-      just not SoF's. Some other Quake 2 engines and mods do use it.
+      id's public <span class="varname">pmove.c</span> has a second air boost function, with a
+      gentler 30-unit cap, gated behind <span class="varname">pm_airaccelerate</span>. Decompiling
+      retail <span class="varname">SoF.exe</span> (and a Linux build, cross-checked) finds no such
+      branch: SoF's own <span class="varname">PM_AirMove</span> just runs one boost computation
+      with <span class="varname">pm_airaccelerate</span> hardcoded to <b>1</b>, and the 30-unit cap
+      formula appears nowhere in the compiled code. It's real code — just not SoF's. Other Quake 2
+      engines and mods do use it.
     </p>
     <div class="panel">
       <div class="panel-row">

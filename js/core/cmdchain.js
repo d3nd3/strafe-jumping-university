@@ -240,8 +240,10 @@ function chainGainSq(speed, push, thetaRad, accel, frametime) {
 }
 
 // The speed at which your crosshair sits exactly on your direction of travel,
-// i.e. where bestAngle(v) == keyAngle. Below it you aim inside the turn, above
-// it you aim outside. Solve push*(1-accel*dt)/v = cos(keyAngle).
+// i.e. where bestAngle(v) == keyAngle. The trajectory always curves towards the
+// push, so "inside the turn" is the push side of your travel: below this speed
+// bestAngle < keyAngle and you aim OUTSIDE the turn, above it you aim inside.
+// Solve push*(1-accel*dt)/v = cos(keyAngle).
 function chainAimedStraightSpeed(keyAngle, push, accel, frametime) {
   const c = Math.cos(keyAngle);
   if (c <= 1e-6) return Infinity; // 90 deg key angle never aims straight

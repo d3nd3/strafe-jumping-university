@@ -4,6 +4,15 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Strafe Jumping University</title>
+<script>
+  // Applied synchronously, before the stylesheet paints, so a returning
+  // visitor who picked the green theme never sees a flash of the default.
+  try {
+    if (localStorage.getItem("sju-theme") === "green") {
+      document.documentElement.setAttribute("data-theme", "green");
+    }
+  } catch (e) {}
+</script>
 <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>

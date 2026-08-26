@@ -8,6 +8,40 @@
 // there's nothing to contents-ify.
 
 const SUBCHAPTER_MIN_HEADINGS = 2;
+const THEME_STORAGE_KEY = "sju-theme";
+
+// Default theme is the unnamed, readability-first light palette in :root;
+// the original dark palette lives under [data-theme="green"] and is opt-in.
+function applyTheme(theme) {
+  if (theme === "green") document.documentElement.setAttribute("data-theme", "green");
+  else document.documentElement.removeAttribute("data-theme");
+}
+
+function createThemeToggle() {
+  const wrap = document.createElement("div");
+  wrap.className = "rail-theme";
+  wrap.innerHTML = `
+    <button class="theme-toggle" type="button" role="switch" aria-checked="false">
+      <span class="theme-toggle-track"><span class="theme-toggle-thumb"></span></span>
+      <span class="theme-toggle-label">Green theme</span>
+    </button>
+  `;
+  const btn = wrap.querySelector(".theme-toggle");
+  const isGreen = () => document.documentElement.getAttribute("data-theme") === "green";
+  const sync = () => btn.setAttribute("aria-checked", String(isGreen()));
+  sync();
+  btn.addEventListener("click", () => {
+    const next = isGreen() ? "reader" : "green";
+    applyTheme(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch (e) {
+      /* private browsing / storage disabled -- theme just won't persist */
+    }
+    sync();
+  });
+  return wrap;
+}
 
 function isDetachedFromView(el, root) {
   // Some chapters embed an <h2> inside a panel that starts hidden (e.g. a
@@ -68,6 +102,7 @@ function createNav(chapters) {
         .join("")}
     </ol>
   `;
+  rail.querySelector(".rail-brand").insertAdjacentElement("afterend", createThemeToggle());
   document.body.appendChild(rail);
 
   const items = [...rail.querySelectorAll(".rail-list > li")];

@@ -15,6 +15,11 @@
 
 const CVAR_FRAMETIME = 0.01; // 100 ticks/sec, matches every other chapter
 
+// How long one flat jump lasts, from the same two constants Chapter 7 launches
+// with: up at CH7_JUMP_VELOCITY, pulled back down by CH7_GRAVITY. Straight up
+// and straight back down is 2v/g seconds, which is 68 ticks.
+const CVAR_JUMP_TICKS = Math.round((2 * CH7_JUMP_VELOCITY) / CH7_GRAVITY / CVAR_FRAMETIME);
+
 const CVAR_PRESETS = [
   { label: "SOF default 200/160", fwd: 200, side: 160 },
   { label: "your config 150/170", fwd: 150, side: 170 },
@@ -476,6 +481,153 @@ function mountChCvars(section) {
     </div>
     <div class="mystery" id="cv-cliff-note">—</div>
 
+    <h2>One tick is not one jump</h2>
+    <p class="muted">
+      Everything up to here is a single 10 ms tick, frozen. A real jump is
+      <b>${CVAR_JUMP_TICKS} ticks</b> long — ${CH7_JUMP_VELOCITY} u/s up against
+      ${CH7_GRAVITY} u/s² of gravity, <b>${(CVAR_JUMP_TICKS * CVAR_FRAMETIME).toFixed(2)} s</b> in
+      the air — and what your mouse does <em>across</em> those ${CVAR_JUMP_TICKS} ticks matters far
+      more than what it does in any one of them. Same <span class="varname">PM_Accelerate</span>,
+      run forward in time.
+    </p>
+    <div class="callout">
+      <b>The crosshair angle on that dial is not a per-tick delta.</b> It is an absolute angle at an
+      instant — where your view sits relative to where you're going. But your velocity rotates
+      underneath you as you accelerate, so <em>holding</em> that angle takes a steady mouse turn,
+      and that turn rate is the thing the dial never showed. It's small:
+      <b>${(chainTrackRate(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
+            chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME)) * DEG / CVAR_FRAMETIME).toFixed(1)}°/s</b>
+      at 600 u/s, dropping to
+      <b>${(chainTrackRate(1000, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
+            chainBestAngle(1000, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME)) * DEG / CVAR_FRAMETIME).toFixed(1)}°/s</b>
+      at 1000. And that turn is not cosmetic — <b>turning is the entire mechanism</b>. Look at
+      <span class="varname">addspeed = wishspeed − currentspeed</span> again: freeze your yaw and
+      <span class="varname">wishdir</span> is fixed in the world, so nothing on earth refills
+      <span class="varname">addspeed</span> except your own acceleration eating it. Turn, and you
+      point <span class="varname">wishdir</span> somewhere your velocity hasn't reached yet, which
+      re-opens it. Every tick.
+    </div>
+
+    <div class="panel">
+      <div class="panel-row">
+        <div class="panel-col sticky-controls controls" style="flex:0 0 290px">
+          <div class="control-row">
+            <label><span>speed at take-off</span><span id="cv-j-speed-val">600</span></label>
+            <input type="range" id="cv-j-speed" min="310" max="1200" step="10" value="600" />
+          </div>
+          <div class="control-row">
+            <label><span>frozen aim, off your route</span><span id="cv-j-ang-val">—</span></label>
+            <input type="range" id="cv-j-ang" min="0" max="110" step="0.1" value="80.8" />
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="cv-j-snap-tick">freeze on the one-tick best</button>
+            <button class="btn" id="cv-j-snap-jump">freeze on the whole-jump best</button>
+          </div>
+
+          <div class="hud-group">turn every tick to hold the best angle</div>
+          <div class="hud" style="flex-direction:column">
+            <div class="hud-stat"><span class="k">SPEED AFTER ${CVAR_JUMP_TICKS} TICKS</span><span class="v" id="cv-j-track">—</span></div>
+            <div class="hud-stat"><span class="k">MOUSE TURN RATE IT NEEDS</span><span class="v" id="cv-j-rate">—</span></div>
+          </div>
+          <div class="hud-group">or aim once and never move again</div>
+          <div class="hud" style="flex-direction:column">
+            <div class="hud-stat"><span class="k">SPEED AFTER ${CVAR_JUMP_TICKS} TICKS</span><span class="v" id="cv-j-frozen">—</span></div>
+            <div class="hud-stat warn"><span class="k">TICKS THAT ACTUALLY GAINED</span><span class="v" id="cv-j-live">—</span></div>
+            <div class="hud-stat"><span class="k">FROZEN vs TRACKING, ON SPEED GAINED</span><span class="v" id="cv-j-frac">—</span></div>
+          </div>
+          <div class="hud-group">how much you'll have turned by landing</div>
+          <div class="hud" style="flex-direction:column">
+            <div class="hud-stat"><span class="k">YOUR ROUTE SWINGS — tracking / frozen</span><span class="v" id="cv-j-head">—</span></div>
+          </div>
+        </div>
+        <div class="panel-col" style="flex:1 1 380px;min-width:320px">
+          <canvas class="scene" id="cv-jump" style="height:300px"></canvas>
+          <div class="legend">
+            <span><span class="swatch" style="background:#7dffb0"></span>turning every tick</span>
+            <span><span class="swatch" style="background:#ffc857"></span>frozen aim</span>
+            <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>ticks worth nothing</span>
+          </div>
+          <canvas class="scene" id="cv-budget" style="height:260px;margin-top:16px"></canvas>
+          <div class="legend">
+            <span><span class="swatch" style="background:#5fb4ff"></span>currentspeed = velocity · wishdir</span>
+            <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>wishspeed 300 — the ceiling on it</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout good" id="cv-jump-note">—</div>
+
+    <div class="mystery">
+      <b>So no — you cannot flick once and coast, and the reason is sharper than it looks.</b>
+      The lower chart is the whole story: <span class="varname">currentspeed</span> is your velocity
+      projected onto <span class="varname">wishdir</span>, and with a frozen yaw it climbs by exactly
+      <span class="varname">accelspeed</span> — <b>${(pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed).toFixed(0)} u/s</b>
+      — every single tick, and by nothing else. You are handed a fixed budget of
+      <b>300 − (your velocity · wishdir)</b> and you spend
+      <b>${(pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed).toFixed(0)}</b> of it per tick. When it
+      runs out, <span class="varname">addspeed</span> is zero and the rest of the flight is free
+      fall.
+      <br /><br />
+      Which produces the result that should change how you read this whole chapter. Freeze your aim
+      on the <em>one-tick best angle</em> — the amber line on every diagram above, the one this
+      chapter has been calling optimal — and
+      <span class="varname">currentspeed</span> is already at
+      <b>${(pm_maxspeed * (1 - pm_airaccelerate * CVAR_FRAMETIME)).toFixed(0)}</b>. Your budget is
+      <b>${(pm_maxspeed * pm_airaccelerate * CVAR_FRAMETIME).toFixed(0)}</b> wide. You get
+      <b>exactly one useful tick</b> out of ${CVAR_JUMP_TICKS}, and land
+      ${(() => {
+        const r = chainJumpRun(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
+          "freeze", chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME));
+        return `<b>${(r.finalSpeed - 600).toFixed(1)} u/s</b>`;
+      })()} faster than you took off. Press <b>freeze on the one-tick best</b> and watch it happen.
+      <br /><br />
+      The best angle to <em>freeze</em> at is a completely different number — the one that spends the
+      budget precisely as you land, roughly
+      <b>${cvarFmtDeg(chainFreezeAngleFor(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME))}</b>
+      at 600 u/s, which is
+      <b>${((chainFreezeAngleFor(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) -
+             chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME)) * DEG).toFixed(0)}°
+      wider</b> than the one-tick answer. That is where "aim wider than feels right" really comes
+      from: not from being kind about your aim, but because a human mouse is closer to frozen than
+      to tracking, and the frozen optimum is a long way out.
+    </div>
+
+    <div class="panel">
+      <table class="cvar-table mono" id="cv-freeze-table">
+        <thead>
+          <tr>
+            <td class="l">freeze your aim at</td>
+            <td>ticks that gained</td>
+            <td>speed at landing</td>
+            <td>gain</td>
+            <td>vs tracking</td>
+            <td>route swings</td>
+          </tr>
+        </thead>
+        <tbody id="cv-freeze-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>And your last question is the one that actually decides a run.</b> Look at the right-hand
+      column. Tracking and a well-chosen frozen aim swing your route by
+      <em>almost the same amount</em> over a jump — so freezing does not buy you a straighter line
+      into the next one, it just costs you speed. Where the frozen aim does buy something is
+      <em>predictability</em>: a fixed yaw turns your velocity along a known arc you can pick before
+      you leave the ground, which is worth real time in a corridor where the next jump has to start
+      from a particular heading. Tracking wins the speed and hands you back a heading you have to
+      correct for; freezing loses
+      ${(() => {
+        const t = chainJumpRun(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME, "track", 0);
+        const f = chainJumpRun(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME,
+          "freeze", chainFreezeAngleFor(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME));
+        return `<b>${(100 - ((f.finalSpeed ** 2 - 360000) / (t.finalSpeed ** 2 - 360000)) * 100).toFixed(0)}%</b>`;
+      })()} of the gain and tells you exactly where you'll be pointing. Neither is "the" answer —
+      which is why the strongest players track hard through the middle of a flight and let the aim
+      settle before the landing.
+    </div>
+
     <h2>So why is sideways-bigger-than-forward genuinely better?</h2>
     <p class="muted">
       Push strength is the same for every sane config, so it can't be about power. It's about where
@@ -548,6 +700,21 @@ function mountChCvars(section) {
   const cliff = section.querySelector("#cv-cliff");
   const aimBestBtn = section.querySelector("#cv-aim-best");
   const aimStraightBtn = section.querySelector("#cv-aim-straight");
+  const jumpCanvas = section.querySelector("#cv-jump");
+  const budgetCanvas = section.querySelector("#cv-budget");
+  const jSpeedInput = section.querySelector("#cv-j-speed");
+  const jAngInput = section.querySelector("#cv-j-ang");
+  const jSpeedVal = section.querySelector("#cv-j-speed-val");
+  const jAngVal = section.querySelector("#cv-j-ang-val");
+  const jTrackEl = section.querySelector("#cv-j-track");
+  const jRateEl = section.querySelector("#cv-j-rate");
+  const jFrozenEl = section.querySelector("#cv-j-frozen");
+  const jLiveEl = section.querySelector("#cv-j-live");
+  const jFracEl = section.querySelector("#cv-j-frac");
+  const jHeadEl = section.querySelector("#cv-j-head");
+  const jumpNote = section.querySelector("#cv-jump-note");
+  const freezeRows = section.querySelector("#cv-freeze-rows");
+
   const engineInput = section.querySelector("#cv-engine");
   const engineNote = section.querySelector("#cv-engine-note");
   const pipeEl = section.querySelector("#cv-pipe");
@@ -1063,6 +1230,120 @@ function mountChCvars(section) {
     pipeEl.innerHTML = rows.join("");
   }
 
+  // ---- the whole-jump pair of charts ---------------------------------------
+  // Left axis is ticks for both, so they read as one picture stacked.
+  function jumpAxes(ctx, w, h, yLo, yHi, yLabel, yFmt, yTicks) {
+    const padL = 52, padR = 14, padT = 16, padB = 30;
+    const xOf = (t) => padL + (t / CVAR_JUMP_TICKS) * (w - padL - padR);
+    const yOf = (v) => h - padB - ((v - yLo) / (yHi - yLo)) * (h - padT - padB);
+    ctx.font = "11px monospace";
+    const vals = yTicks || [0, 1, 2, 3, 4].map((i) => yLo + ((yHi - yLo) * i) / 4);
+    for (const v of vals) {
+      const y = yOf(v);
+      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(w - padR, y);
+      ctx.stroke();
+      ctx.fillStyle = "#8fa89a";
+      ctx.textAlign = "right";
+      ctx.fillText(yFmt(v), padL - 6, y + 4);
+    }
+    ctx.textAlign = "center";
+    for (let t = 0; t <= CVAR_JUMP_TICKS; t += 17) {
+      ctx.fillStyle = "#8fa89a";
+      ctx.fillText(String(t), xOf(t), h - padB + 16);
+    }
+    ctx.fillText("ticks since take-off →  (landing at " + CVAR_JUMP_TICKS + ")",
+      (padL + w - padR) / 2, h - 3);
+    ctx.save();
+    ctx.translate(13, (padT + h - padB) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+    ctx.textAlign = "left";
+    return { xOf, yOf, padL, padR, padT, padB };
+  }
+
+  function series(ctx, ax, values, color, width, dash) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dash || []);
+    ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = ax.xOf(i), y = ax.yOf(v);
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function drawJump(j) {
+    const { ctx, w, h } = fit(jumpCanvas);
+    const lo = j.start;
+    const hi = Math.max(j.track.finalSpeed, j.frozen.finalSpeed) + 6;
+    const ax = jumpAxes(ctx, w, h, lo, hi, "speed (u/s)", (v) => v.toFixed(0));
+
+    // the stretch of the flight the frozen aim is getting nothing out of
+    if (j.frozen.deadAt >= 0) {
+      ctx.fillStyle = "rgba(255,90,90,0.13)";
+      ctx.fillRect(ax.xOf(j.frozen.deadAt), ax.padT,
+        ax.xOf(CVAR_JUMP_TICKS) - ax.xOf(j.frozen.deadAt), h - ax.padT - ax.padB);
+      ctx.fillStyle = "rgba(255,120,120,0.9)";
+      ctx.font = "11px monospace";
+      ctx.fillText("addspeed hit 0 at tick " + j.frozen.deadAt,
+        Math.min(ax.xOf(j.frozen.deadAt) + 6, w - 170), ax.padT + 12);
+    }
+
+    series(ctx, ax, j.track.speeds, "#7dffb0", 2.5);
+    series(ctx, ax, j.frozen.speeds, "#ffc857", 2.5);
+
+    ctx.font = "11px monospace";
+    ctx.fillStyle = "#7dffb0";
+    ctx.fillText("+" + (j.track.finalSpeed - j.start).toFixed(1), ax.xOf(CVAR_JUMP_TICKS) - 46, ax.yOf(j.track.finalSpeed) - 6);
+    ctx.fillStyle = "#ffc857";
+    ctx.fillText("+" + (j.frozen.finalSpeed - j.start).toFixed(1), ax.xOf(CVAR_JUMP_TICKS) - 46, ax.yOf(j.frozen.finalSpeed) + 14);
+  }
+
+  function drawBudget(j) {
+    const { ctx, w, h } = fit(budgetCanvas);
+    // a frozen aim inside the dead cone starts ABOVE the ceiling -- that is the
+    // whole point of it, so the axis has to have room to show it
+    const top = Math.max(pm_maxspeed * 1.12, ...j.frozen.currents, ...j.track.currents) + 12;
+    const ax = jumpAxes(ctx, w, h, 0, top, "velocity · wishdir",
+      (v) => v.toFixed(0), [0, 100, 200, 300, 400].filter((v) => v <= top - 10));
+
+    // the wishspeed ceiling -- the thing addspeed is measured against
+    ctx.strokeStyle = "rgba(255,90,90,0.7)";
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(ax.padL, ax.yOf(pm_maxspeed));
+    ctx.lineTo(w - ax.padR, ax.yOf(pm_maxspeed));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.font = "11px monospace";
+    ctx.fillStyle = "rgba(255,120,120,0.9)";
+    ctx.textAlign = "right";
+    ctx.fillText("wishspeed 300 — touch this and addspeed is 0", w - ax.padR, ax.yOf(pm_maxspeed) - 6);
+    ctx.textAlign = "left";
+
+    // Tracking re-opens the gap by hand every tick, so its line never climbs --
+    // it lands on the frozen line whenever the frozen aim is the one-tick best,
+    // so draw it dashed and let the solid blue read through.
+    series(ctx, ax, j.track.currents, "#7dffb0", 2, [5, 4]);
+    series(ctx, ax, j.frozen.currents, "#5fb4ff", 2.5);
+
+    // captions live in the empty bottom-left corner, never on the lines
+    ctx.fillStyle = "#7dffb0";
+    ctx.fillText("turning drags this back to " + (pm_maxspeed * (1 - pm_airaccelerate * CVAR_FRAMETIME)).toFixed(0) + " every tick",
+      ax.padL + 6, h - ax.padB - 26);
+    ctx.fillStyle = "#5fb4ff";
+    ctx.fillText("frozen: climbs " + (pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed).toFixed(0) + "/tick, and nothing puts it back",
+      ax.padL + 6, h - ax.padB - 12);
+  }
+
   function render() {
     const fwd = +fwdInput.value;
     const side = +sideInput.value;
@@ -1202,6 +1483,96 @@ function mountChCvars(section) {
   dial.addEventListener("pointerup", endDrag);
   dial.addEventListener("pointercancel", endDrag);
 
+  // ---- the whole-jump demo, which has its own sliders --------------------
+  const jumpRun = (start, mode, ang) =>
+    chainJumpRun(start, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME, mode, ang);
+
+  function renderJump() {
+    const start = +jSpeedInput.value;
+    const ang = +jAngInput.value / DEG;
+    jSpeedVal.textContent = start;
+    jAngVal.textContent = (+jAngInput.value).toFixed(1) + "°";
+
+    const track = jumpRun(start, "track", 0);
+    const frozen = jumpRun(start, "freeze", ang);
+    const j = { start, track, frozen };
+
+    const gain = (r) => r.finalSpeed ** 2 - start ** 2;
+    const frac = gain(track) > 0 ? gain(frozen) / gain(track) : 0;
+    const bestNow = chainBestAngle(start, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME);
+    const rate = chainTrackRate(start, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME, bestNow);
+    const freezeBest = chainFreezeAngleFor(start, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME);
+
+    jTrackEl.textContent = track.finalSpeed.toFixed(1) + "  (+" + (track.finalSpeed - start).toFixed(1) + ")";
+    jRateEl.textContent = (rate * DEG / CVAR_FRAMETIME).toFixed(1) + "°/s";
+    jFrozenEl.textContent = frozen.finalSpeed.toFixed(1) + "  (+" + (frozen.finalSpeed - start).toFixed(1) + ")";
+    jLiveEl.textContent = frozen.live + " of " + CVAR_JUMP_TICKS;
+    jFracEl.textContent = (frac * 100).toFixed(0) + "%";
+    jHeadEl.textContent =
+      (track.headingTurned * DEG).toFixed(1) + "° / " + (frozen.headingTurned * DEG).toFixed(1) + "°";
+
+    jumpNote.innerHTML = `
+      Turning every tick, <span class="varname">|v|²</span> climbs by exactly
+      <b>${(2 * pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed * pm_maxspeed * (1 - pm_airaccelerate * CVAR_FRAMETIME)
+            + (pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed) ** 2).toFixed(0)}</b>
+      per tick — the same number at 400 u/s as at 1200, because
+      <span class="varname">currentspeed</span> is pinned at
+      <b>${(pm_maxspeed * (1 - pm_airaccelerate * CVAR_FRAMETIME)).toFixed(0)}</b> whatever your
+      speed. So there is <b>no ceiling in the air at all</b>: speed is
+      <b>√(v₀² + ${(2 * pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed * pm_maxspeed * (1 - pm_airaccelerate * CVAR_FRAMETIME)
+            + (pm_airaccelerate * CVAR_FRAMETIME * pm_maxspeed) ** 2).toFixed(0)} × ticks)</b>, which
+      is why gains feel like they die off — they don't, the square root does. From
+      ${start} u/s this jump ends at <b>${track.finalSpeed.toFixed(1)}</b>.
+      <br /><br />
+      Frozen at <b>${(+jAngInput.value).toFixed(1)}°</b> you get
+      <b>${frozen.live} of ${CVAR_JUMP_TICKS}</b> ticks
+      ${frozen.deadAt >= 0
+        ? `— <span class="varname">addspeed</span> ran out at tick <b>${frozen.deadAt}</b> and the rest of the flight did nothing`
+        : `— the budget lasts the whole flight`},
+      landing at <b>${frozen.finalSpeed.toFixed(1)}</b>, which is <b>${(frac * 100).toFixed(0)}%</b>
+      of what tracking gained. The best you can do frozen from this speed is
+      <b>${cvarFmtDeg(freezeBest)}</b>, and that ceiling is
+      <b>${((() => {
+        const r = jumpRun(start, "freeze", freezeBest);
+        return (gain(r) / gain(track)) * 100;
+      })()).toFixed(0)}%</b> — a number that barely moves with speed, because both strategies scale
+      the same way.`;
+
+    freezeRows.innerHTML = [
+      { a: bestNow * DEG, tag: "the one-tick best" },
+      { a: bestNow * DEG + 5, tag: "5° wider" },
+      { a: bestNow * DEG + 10, tag: "10° wider" },
+      { a: freezeBest * DEG, tag: "best for a whole jump" },
+      { a: 90, tag: "straight across your route" },
+    ].map((r) => {
+      const run = jumpRun(start, "freeze", r.a / DEG);
+      const pct = (gain(run) / gain(track)) * 100;
+      return `<tr>
+        <td class="l">${r.a.toFixed(1)}° <span style="color:var(--text-dim)">— ${r.tag}</span></td>
+        <td class="${run.live < CVAR_JUMP_TICKS ? "hot" : ""}">${run.live} / ${CVAR_JUMP_TICKS}</td>
+        <td>${run.finalSpeed.toFixed(1)}</td>
+        <td class="hot">+${(run.finalSpeed - start).toFixed(1)}</td>
+        <td>${pct.toFixed(0)}%</td>
+        <td>${(run.headingTurned * DEG).toFixed(1)}°</td>
+      </tr>`;
+    }).join("");
+
+    drawJump(j);
+    drawBudget(j);
+  }
+
+  jSpeedInput.addEventListener("input", renderJump);
+  jAngInput.addEventListener("input", renderJump);
+  section.querySelector("#cv-j-snap-tick").addEventListener("click", () => {
+    jAngInput.value = (chainBestAngle(+jSpeedInput.value, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) * DEG).toFixed(1);
+    renderJump();
+  });
+  section.querySelector("#cv-j-snap-jump").addEventListener("click", () => {
+    jAngInput.value = (chainFreezeAngleFor(+jSpeedInput.value, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) * DEG).toFixed(1);
+    renderJump();
+  });
+  window.addEventListener("resize", renderJump);
+
   aimBestBtn.addEventListener("click", () => { aimMode = "best"; render(); });
   aimStraightBtn.addEventListener("click", () => { aimMode = "straight"; render(); });
   engineInput.addEventListener("change", render);
@@ -1211,4 +1582,5 @@ function mountChCvars(section) {
   speedInput.addEventListener("input", render);
   window.addEventListener("resize", render);
   render();
+  renderJump();
 }

@@ -281,6 +281,96 @@ function chainGainSq(speed, push, thetaRad, accel, frametime) {
   return 2 * a * current + a * a;
 }
 
+// ---------------------------------------------------------------------------
+// ONE WHOLE JUMP, tick by tick, instead of one tick in isolation.
+//
+// bestAngle above answers "where should the push be RIGHT NOW". Across a real
+// flight two different things can happen and they are nothing alike:
+//
+//  TRACKING -- turn the mouse every tick so the push stays on bestAngle. Then
+//    currentspeed is push*(1-accel*dt) going into every tick and push coming
+//    out of it, so addspeed is re-opened by hand, every tick, by the act of
+//    turning. |v|^2 then grows by exactly 2*a*push*(1-accel*dt) + a^2 per tick
+//    -- 1791 with SoF's numbers -- and that rate does NOT depend on how fast
+//    you already are. Speed is sqrt(v0^2 + 1791n): no ceiling, just sqrt.
+//
+//  FROZEN -- pick one yaw and hold it. wishdir is now fixed in world space, so
+//    the ONLY thing that changes currentspeed is your own acceleration adding
+//    accelspeed to it: it climbs by exactly `a` per tick and nothing re-opens
+//    it. When it reaches wishspeed, addspeed is 0 and every remaining tick of
+//    the jump is worth nothing at all. You get (push - v0.w)/a useful ticks.
+//
+// The sting is in that last line. Freeze on the one-tick "best angle", where
+// v0.w is already push - a, and you get exactly ONE useful tick out of the
+// whole jump. The best angle to freeze at is far wider, and it is the one that
+// spends the budget exactly as the jump ends -- see chainFreezeAngleFor.
+// ---------------------------------------------------------------------------
+function chainJumpRun(startSpeed, ticks, push, accel, frametime, mode, freezeAngle) {
+  let vx = startSpeed;
+  let vy = 0;
+  const a = accel * frametime * push;
+  const speeds = [startSpeed];
+  const currents = [];
+  let live = 0;
+  let deadAt = -1;
+
+  for (let i = 0; i < ticks; i++) {
+    const sp = Math.hypot(vx, vy);
+    let wx, wy;
+    if (mode === "track") {
+      // re-aim: put the push back on bestAngle, measured off the CURRENT travel
+      const th = chainBestAngle(sp, push, accel, frametime);
+      const c = Math.cos(th);
+      const s = Math.sin(th);
+      wx = (vx / sp) * c - (vy / sp) * s;
+      wy = (vx / sp) * s + (vy / sp) * c;
+    } else {
+      // world-fixed yaw, so a world-fixed wishdir, measured off the take-off run
+      wx = Math.cos(freezeAngle);
+      wy = Math.sin(freezeAngle);
+    }
+
+    const current = vx * wx + vy * wy; // DotProduct(velocity, wishdir)
+    currents.push(current);
+    const addspeed = push - current;
+    if (addspeed > 0) {
+      const accelspeed = Math.min(a, addspeed);
+      vx += accelspeed * wx;
+      vy += accelspeed * wy;
+      live++;
+    } else if (deadAt < 0) {
+      deadAt = i;
+    }
+    speeds.push(Math.hypot(vx, vy));
+  }
+
+  return {
+    speeds, // ticks+1 long, speeds[0] is take-off
+    currents, // DotProduct(velocity, wishdir) entering each tick
+    live, // ticks that actually moved you
+    deadAt, // first tick that returned on addspeed <= 0, or -1
+    finalSpeed: Math.hypot(vx, vy),
+    headingTurned: Math.atan2(vy, vx), // how far your route swung, for the next jump
+  };
+}
+
+// The frozen aim that spends the whole 300 budget exactly as the jump ends:
+// solve v0*cos(theta) + a*ticks = push. Anything narrower runs dry early and
+// coasts; anything wider never finishes spending and wastes the width.
+function chainFreezeAngleFor(startSpeed, ticks, push, accel, frametime) {
+  const c = (push - accel * frametime * push * ticks) / startSpeed;
+  if (c >= 1) return 0;
+  if (c <= -1) return Math.PI;
+  return Math.acos(c);
+}
+
+// How fast your mouse has to turn, in radians per tick, to hold a given
+// push-to-travel angle while the velocity itself is rotating under you. This is
+// the "delta per tick" the dial's static angle never shows.
+function chainTrackRate(speed, push, accel, frametime, theta) {
+  return (accel * frametime * push * Math.sin(theta)) / speed;
+}
+
 // The speed at which your crosshair sits exactly on your direction of travel,
 // i.e. where bestAngle(v) == keyAngle. The trajectory always curves towards the
 // push, so "inside the turn" is the push side of your travel: below this speed

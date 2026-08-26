@@ -233,14 +233,24 @@ function mountChCvars(section) {
             <input type="range" id="cv-speed" min="310" max="1200" step="10" value="600" />
           </div>
           <div class="btn-row" id="cv-presets" style="flex-wrap:wrap"></div>
-          <div class="btn-row">
-            <button class="btn primary" id="cv-aim-reset">↺ put my aim back on best</button>
+
+          <div class="mono" style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:-6px">
+            where is your mouse pointing?
           </div>
+          <div class="btn-row">
+            <button class="btn" id="cv-aim-best">aiming perfectly</button>
+            <button class="btn" id="cv-aim-straight">not turning at all</button>
+          </div>
+
+          <div class="hud-group">everything your two cvars set</div>
           <div class="hud" style="flex-direction:column">
-            <div class="hud-stat"><span class="k">PUSH STRENGTH (after everything)</span><span class="v" id="cv-push">—</span></div>
-            <div class="hud-stat"><span class="k">KEY ANGLE — crosshair to push</span><span class="v" id="cv-key">—</span></div>
-            <div class="hud-stat warn"><span class="k">DEAD ANGLE — under this you gain zero</span><span class="v" id="cv-dead">—</span></div>
-            <div class="hud-stat warn"><span class="k">BEST ANGLE — put the push here</span><span class="v" id="cv-best">—</span></div>
+            <div class="hud-stat"><span class="k">PUSH STRENGTH — length of the blue arrow</span><span class="v" id="cv-push">—</span></div>
+            <div class="hud-stat"><span class="k">KEY ANGLE — push, measured from your CROSSHAIR</span><span class="v" id="cv-key">—</span></div>
+          </div>
+          <div class="hud-group">and nothing else — the rest is speed and mouse</div>
+          <div class="hud" style="flex-direction:column">
+            <div class="hud-stat warn"><span class="k">DEAD ANGLE — push nearer your ROUTE than this gains zero</span><span class="v" id="cv-dead">—</span></div>
+            <div class="hud-stat warn"><span class="k">BEST ANGLE — put the push here, measured from your ROUTE</span><span class="v" id="cv-best">—</span></div>
             <div class="hud-stat"><span class="k">SO YOUR CROSSHAIR SITS</span><span class="v" id="cv-off">—</span></div>
             <div class="hud-stat"><span class="k">MARGIN BEFORE YOU GAIN NOTHING</span><span class="v" id="cv-margin">—</span></div>
           </div>
@@ -312,6 +322,30 @@ function mountChCvars(section) {
     </div>
 
     <div class="callout good" id="cv-explain">—</div>
+
+    <div class="mystery">
+      <b>The one number on this dial your config does <em>not</em> set is the angle between your
+      push and your route.</b> Your cvars fix the push relative to your <em>crosshair</em>, and
+      nothing more. Try it: set
+      <span class="varname">cl_forwardspeed 300</span> /
+      <span class="varname">cl_sidespeed 5</span> and the key angle comes out
+      <b>${cvarFmtDeg(cmdChain(300, 5).keyAngle)}</b> — hold W+D without touching the mouse and you
+      fly dead straight, exactly as you do in game. Now press <b>“not turning at all”</b>. The
+      crosshair drops onto your route, the push lands
+      <b>${cvarFmtDeg(cmdChain(300, 5).keyAngle)}</b> off it, that is deep inside the red, and the
+      meter reads zero. You really are flying straight — and gaining nothing for it.
+      <br /><br />
+      The wide angle the dial normally draws is not a prediction of what
+      <span class="varname">300/5</span> does to you. It is where your <em>mouse</em> would have to
+      be for that config to earn anything at all — and with a
+      <b>${cvarFmtDeg(cmdChain(300, 5).keyAngle)}</b> key angle, your mouse has to do essentially
+      all of the work, dragging your crosshair
+      <b>${(
+        (chainBestAngle(600, cmdChain(300, 5).push, pm_airaccelerate, CVAR_FRAMETIME) -
+          cmdChain(300, 5).keyAngle) * DEG
+      ).toFixed(1)}°</b> off your own route at 600 u/s to get the push clear of the cliff. That is
+      the cost of a narrow key angle, and it is the whole argument of this chapter.
+    </div>
 
     <div class="mystery">
       <b>Check the direction on the dial — it runs the opposite way to most people's guess.</b>
@@ -421,13 +455,28 @@ function mountChCvars(section) {
   const dial = section.querySelector("#cv-dial");
   const graph = section.querySelector("#cv-graph");
   const cliff = section.querySelector("#cv-cliff");
-  const aimResetBtn = section.querySelector("#cv-aim-reset");
+  const aimBestBtn = section.querySelector("#cv-aim-best");
+  const aimStraightBtn = section.querySelector("#cv-aim-straight");
 
-  // Where the user has dragged their crosshair to, in radians off travel.
-  // null = "aiming perfectly", which is recomputed from the current speed and
-  // config every render. Once dragged it stays put while you move the sliders,
-  // which is the point: you get to watch the push swing in and out of the cone.
-  let aimOverride = null;
+  // Where the mouse is pointing. This is deliberately NOT something the cvars
+  // decide -- the single most common misreading of this dial is taking the
+  // push-to-travel angle as a prediction of the config, when it is a prediction
+  // of your aim. Three modes:
+  //
+  //   "best"     crosshair wherever the push earns the most (the useful case)
+  //   "straight" crosshair on your route, i.e. you never touch the mouse --
+  //              which is what "cl_forwardspeed 300 / cl_sidespeed 5 flies
+  //              straight" actually looks like, and it gains nothing
+  //   "drag"     wherever the reader dragged it, kept across slider changes so
+  //              you can watch the push swing in and out of the cone
+  let aimMode = "best";
+  let aimDragged = 0;
+
+  function aimFor(best, keyAngle) {
+    if (aimMode === "straight") return 0;
+    if (aimMode === "drag") return aimDragged;
+    return best - keyAngle;
+  }
 
   CVAR_PRESETS.forEach((p) => {
     const btn = document.createElement("button");
@@ -637,21 +686,39 @@ function mountChCvars(section) {
     const kHi = Math.max(m.aim, pushAng);
     wedge(ctx, ox, oy, 0, R * 0.6, kLo, kHi, "rgba(255,200,87,0.18)", "rgba(255,200,87,0.8)", [4, 3]);
 
+    // Travel is pinned along +x, so anything aimed near 0° lands its label on top
+    // of the travel label. Stack them by hand in that case: push above the axis,
+    // crosshair below it. Happens constantly in "not turning at all".
+    const flat = (t) => Math.abs(Math.atan2(Math.sin(t), Math.cos(t))) < 8 / DEG;
+    const stacked = (t, r, text, color, dy) => {
+      const [lx, ly] = polar(ox, oy, r, t);
+      ctx.font = "11px monospace";
+      ctx.fillStyle = color;
+      ctx.textAlign = "left";
+      ctx.fillText(text, lx + 6, ly + dy);
+    };
+
     arrow(ctx, ox, oy, 0, R * 0.99, "#eafff2", null, 3);
     radialLabel(ctx, ox, oy, 0, R * 0.99 + 4, "travel 0°", "#eafff2");
 
     arrow(ctx, ox, oy, m.aim, R * 0.78, "#ffc857", null, 3);
-    radialLabel(ctx, ox, oy, m.aim, R * 0.78 + 4, "crosshair " + cvarFmtDeg(m.aim), "#ffc857");
+    if (flat(m.aim)) stacked(m.aim, R * 0.78, "crosshair " + cvarFmtDeg(m.aim), "#ffc857", 18);
+    else radialLabel(ctx, ox, oy, m.aim, R * 0.78 + 4, "crosshair " + cvarFmtDeg(m.aim), "#ffc857");
 
     arrow(ctx, ox, oy, pushAng, R * 0.99, inDead ? "#ff6b6b" : "#5fb4ff", null, 3.5);
-    radialLabel(ctx, ox, oy, pushAng, R * 0.99 + 4, "push " + cvarFmtDeg(pushBearing),
-      inDead ? "#ff6b6b" : "#5fb4ff");
+    const pushColor = inDead ? "#ff6b6b" : "#5fb4ff";
+    if (flat(pushAng)) stacked(pushAng, R * 0.99, "push " + cvarFmtDeg(pushBearing), pushColor, -12);
+    else radialLabel(ctx, ox, oy, pushAng, R * 0.99 + 4, "push " + cvarFmtDeg(pushBearing), pushColor);
 
     // the key-angle caption sits inside its own wedge, on a plate so it stays
     // readable when a narrow V puts an arrow straight through it
     const kMid = (kLo + kHi) / 2;
     const kText = "key " + cvarFmtDeg(Math.abs(m.key));
-    const [klx, kly] = polar(ox, oy, R * 0.36, kMid);
+    // a narrow V leaves no room inside itself, so push the plate off to the side
+    const kNudge = Math.abs(m.key) < 14 / DEG ? 22 : 0;
+    const [klx0, kly0] = polar(ox, oy, R * 0.36, kMid);
+    const klx = klx0 + Math.sin(-kMid) * kNudge;
+    const kly = kly0 - Math.cos(-kMid) * kNudge;
     ctx.font = "12px monospace";
     const kw = ctx.measureText(kText).width;
     ctx.fillStyle = "rgba(11,15,12,0.82)";
@@ -674,9 +741,16 @@ function mountChCvars(section) {
     ctx.fillStyle = "#8fa89a";
     ctx.fillText("top-down · you are the dot · " + m.speed.toFixed(0) + " u/s · dead cone ±" + cvarFmtDeg(m.dead), 10, 16);
     ctx.fillStyle = "rgba(255,200,87,0.9)";
-    ctx.fillText("your two cvars weld this V open at " + cvarFmtDeg(Math.abs(m.key)) + " — nothing else", 10, 32);
-    ctx.fillStyle = "rgba(143,168,154,0.85)";
-    ctx.fillText("drag inside to aim · red judges the BLUE arrow only", 10, 48);
+    ctx.fillText("your cvars set ONE thing here: the V is welded open at " + cvarFmtDeg(Math.abs(m.key)), 10, 32);
+    // where the V is pointed is the mouse's doing, so say so on every frame
+    ctx.fillStyle = m.mode === "straight" ? "rgba(255,120,120,0.95)" : "rgba(143,168,154,0.85)";
+    ctx.fillText(
+      m.mode === "straight"
+        ? "mouse: not turning at all — so the push falls in the red"
+        : m.mode === "drag"
+          ? "mouse: wherever you dragged it — drag again to move it"
+          : "mouse: aimed perfectly — this is a CHOICE, not your config",
+      10, 48);
 
     // ---- gain meter ----------------------------------------------------------
     const gainAt = (t) =>
@@ -856,11 +930,10 @@ function mountChCvars(section) {
 
     const dead = chainDeadAngle(speed, push);
     const best = chainBestAngle(speed, push, pm_airaccelerate, CVAR_FRAMETIME);
-    // aimOverride is what the user dragged; null means "aiming perfectly", which
-    // puts the push exactly on the best angle.
-    const aim = aimOverride === null ? best - chain.keyAngle : aimOverride;
-    const m = { key: chain.keyAngle, push, speed, dead, best, aim };
-    aimResetBtn.disabled = aimOverride === null;
+    const aim = aimFor(best, chain.keyAngle);
+    const m = { key: chain.keyAngle, push, speed, dead, best, aim, mode: aimMode };
+    aimBestBtn.classList.toggle("primary", aimMode === "best");
+    aimStraightBtn.classList.toggle("primary", aimMode === "straight");
 
     pushEl.textContent = push.toFixed(1) + (chain.atCap ? " (at the cap)" : "");
     keyEl.textContent = cvarFmtDeg(chain.keyAngle);
@@ -942,7 +1015,8 @@ function mountChCvars(section) {
     // screen y grows downward, so negate it to get back to a world angle
     let t = Math.atan2(-dy, dx);
     // keep the arrows on the canvas -- the interesting range is the near half
-    aimOverride = Math.max(-80 / DEG, Math.min(150 / DEG, t));
+    aimDragged = Math.max(-80 / DEG, Math.min(150 / DEG, t));
+    aimMode = "drag";
     render();
   }
 
@@ -960,10 +1034,8 @@ function mountChCvars(section) {
   dial.addEventListener("pointerup", endDrag);
   dial.addEventListener("pointercancel", endDrag);
 
-  aimResetBtn.addEventListener("click", () => {
-    aimOverride = null;
-    render();
-  });
+  aimBestBtn.addEventListener("click", () => { aimMode = "best"; render(); });
+  aimStraightBtn.addEventListener("click", () => { aimMode = "straight"; render(); });
 
   fwdInput.addEventListener("input", render);
   sideInput.addEventListener("input", render);

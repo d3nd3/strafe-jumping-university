@@ -263,6 +263,17 @@ pre.code {
 .legend { display: flex; gap: 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--text-dim); margin-top: 8px; }
 .legend span.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 
+.hud-group {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-bottom: -6px;
+}
+
 /* what every arrow on the dial actually means */
 .glossary { margin: 0; }
 .glossary dt {

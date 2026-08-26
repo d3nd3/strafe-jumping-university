@@ -121,6 +121,16 @@ function createNav(chapters) {
   );
   updateActive();
 
+  // Open a chapter's sub-list the instant it's clicked, rather than waiting
+  // for the (possibly multi-second, smooth) scroll to carry the viewport
+  // past the LINE threshold — clicking should feel immediate.
+  links.forEach((l, i) => l.addEventListener("click", () => setActive(i)));
+  subLinks.forEach((l) => {
+    l.addEventListener("click", () => {
+      subLinks.forEach((s) => s.classList.toggle("active", s === l));
+    });
+  });
+
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
     const current = links.findIndex((l) => l.classList.contains("active"));

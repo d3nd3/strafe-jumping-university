@@ -73,6 +73,42 @@ body {
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
+.rail-caret {
+  margin-left: auto;
+  font-size: 10px;
+  flex-shrink: 0;
+  color: var(--text-dim);
+  transition: transform .15s ease;
+}
+li.open > a .rail-caret { transform: rotate(180deg); }
+
+/* Sub-chapters: a chapter's own <h2> headings, promoted into a nested TOC.
+   Collapsed except for whichever chapter is currently in view. */
+.rail-subs {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: none;
+}
+li.open > .rail-subs { display: block; }
+.rail-subs a {
+  display: block;
+  padding: 6px 20px 6px 44px;
+  margin-left: 10px;
+  border-left: 1px solid var(--border);
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 0.8;
+  transition: all .15s ease;
+}
+.rail-subs a:hover { color: var(--text); opacity: 1; }
+.rail-subs a.active {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  opacity: 1;
+}
 
 /* ---------- layout ---------- */
 main { margin-left: var(--rail-w); }

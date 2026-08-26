@@ -414,6 +414,31 @@ function mountChCvars(section) {
     </div>
 
     <div class="mystery">
+      <b>Which is why, on “aiming perfectly”, the blue arrow sits perfectly still while you drag the
+      cvar sliders — and the orange one does all the moving.</b> That is not the dial being lazy. On
+      that setting the push is by definition parked on the best angle, and the best angle is
+      <span class="varname">acos(push × (1 − accel × frametime) / speed)</span>. Look at what's in
+      that expression: your speed, and <em>push strength</em>. Your two numbers appear nowhere else —
+      and push strength is a flat <b>300</b> for every config where max(f, s) reaches ${floor}. So at
+      600 u/s the blue arrow is pinned at
+      <b>${cvarFmtDeg(chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME))}</b>
+      whatever you type, and the only thing your config decides is how far behind it your crosshair
+      has to trail. The dial is animating this chapter's thesis.
+      <br /><br />
+      And it really is the cap doing that, not a hardcoded arrow — fall under it and the blue one
+      moves. Press <b>too low 100/100</b>: step ② shrinks that to 70/70, so the push manages only
+      <b>${cmdChain(100, 100).push.toFixed(1)}</b>, and the best angle swings out to
+      <b>${cvarFmtDeg(chainBestAngle(600, cmdChain(100, 100).push, pm_airaccelerate, CVAR_FRAMETIME))}</b>.
+      A weaker push has to be aimed wider to beat the same speed. That is also exactly why
+      <span class="varname">${floor}</span> is a floor and not a preference.
+      <br /><br />
+      On <b>“not turning at all”</b> none of that applies: there the push is just your key angle,
+      measured straight off your route, so of course your cvars swing it. Two different questions —
+      <em>where does the push have to be?</em> and <em>where do the keys put it?</em> — and the two
+      buttons ask one each.
+    </div>
+
+    <div class="mystery">
       <b>Check the direction on the dial — it runs the opposite way to most people's guess.</b>
       Push <span class="varname">cl_forwardspeed</span> far above
       <span class="varname">cl_sidespeed</span> and the key angle <em>shrinks</em>: your keys now
@@ -684,7 +709,7 @@ function mountChCvars(section) {
   //   m.best = the push angle that earns the most
   function drawDial(m) {
     const { ctx, w, h } = fit(dial);
-    const headH = 62;   // the three caption lines along the top
+    const headH = 78;   // the four caption lines along the top
     const meterH = 56;  // the gain bar along the bottom
     const ox = w * 0.46;
     const oy = (headH + (h - meterH)) / 2;
@@ -826,6 +851,17 @@ function mountChCvars(section) {
           ? "mouse: wherever you dragged it — drag again to move it"
           : "mouse: aimed perfectly — this is a CHOICE, not your config",
       10, 48);
+
+    // and say outright what is driving the blue arrow, because in "aiming
+    // perfectly" it sits still while the cvar sliders move and that looks broken
+    ctx.fillStyle = "rgba(95,180,255,0.85)";
+    ctx.fillText(
+      m.mode === "best"
+        ? m.atCap
+          ? "blue arrow = acos(300 × 0.99 / speed) — your cvars are not in that"
+          : "blue arrow moves with your cvars here: push is only " + m.push.toFixed(0) + ", under the 300 cap"
+        : "blue arrow = crosshair + key angle, so your cvars swing it",
+      10, 64);
 
     // ---- gain meter ----------------------------------------------------------
     const gainAt = (t) =>
@@ -1055,7 +1091,10 @@ function mountChCvars(section) {
     const dead = chainDeadAngle(speed, push);
     const best = chainBestAngle(speed, push, pm_airaccelerate, CVAR_FRAMETIME);
     const aim = aimFor(best, chain.keyAngle);
-    const m = { key: chain.keyAngle, push, speed, dead, best, aim, mode: aimMode, engine: chain.engine };
+    const m = {
+      key: chain.keyAngle, push, speed, dead, best, aim,
+      mode: aimMode, engine: chain.engine, atCap: chain.atCap,
+    };
     aimBestBtn.classList.toggle("primary", aimMode === "best");
     aimStraightBtn.classList.toggle("primary", aimMode === "straight");
 

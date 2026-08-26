@@ -354,6 +354,146 @@ function chainJumpRun(startSpeed, ticks, push, accel, frametime, mode, freezeAng
   };
 }
 
+// ---------------------------------------------------------------------------
+// FLAT GROUND, WITH SOF'S ACTUAL RULES.
+//
+// chainJumpRun above is one jump in a vacuum, and it has no ceiling because
+// nothing in the air ever takes speed back. Real flat ground takes it back
+// twice over, and the two together are why the playground in Chapter 7 tops
+// out somewhere near 400 rather than climbing forever.
+//
+//  PM_Friction  (sof-bin 0x812dce0, decompiled -- the retail function matches
+//    the leaked pmove.c line for line):
+//      control  = speed < pm_stopspeed ? pm_stopspeed : speed
+//      drop     = pm_friction * control * frametime
+//      newspeed = max(0, speed - drop) / speed, scaled onto all three axes
+//    Above pm_stopspeed that is a flat pm_friction*frametime = 6% of your
+//    speed, every grounded tick. A PERCENTAGE -- so the faster you are, the
+//    more it takes.
+//
+//  PMF_TIME_LAND  (PM_CatagorizePosition, pmove.c:792-799): touch down below
+//    -200 u/s and PM_CheckJump refuses to fire for 18 more counts. A flat jump
+//    from CH7_JUMP_VELOCITY always lands near -270, so this always trips, and
+//    at 100 fps the >>3 floor makes it 18 whole FRAMES glued to the floor --
+//    see chainLockoutMs. Eighteen ticks of 6% is the whole story.
+//
+// Air gain per jump is a fixed number of u/s^2; ground loss per landing is a
+// fraction of where you already are. They cross, and the crossing point is
+// your terminal speed. Turn either mechanic off and the ceiling vanishes.
+// ---------------------------------------------------------------------------
+function chainGroundCycles(startSpeed, jumps, opts) {
+  const o = opts || {};
+  const dt = o.frametime || 0.01;
+  const push = o.push || pm_maxspeed;
+  const gravity = o.gravity;
+  const jumpVelocity = o.jumpVelocity;
+  const airMode = o.airMode || "track";
+  const freezeAngle = o.freezeAngle || 0;
+  const groundStrafe = o.groundStrafe !== false;
+  const useFriction = o.friction !== false;
+  const useLockout = o.lockout !== false;
+
+  let vx = startSpeed, vy = 0, vz = 0, z = 0;
+  let grounded = true, landTime = 0, frozen = null;
+  const speeds = [startSpeed];
+  const phases = [];
+  const events = [];
+  let tick = 0;
+  const cap = jumps * 400;
+
+  // rotate a unit copy of the velocity by theta, which is how both the air and
+  // the ground "keep strafing" branches pick a wishdir
+  const offVelocity = (theta) => {
+    const sp = Math.hypot(vx, vy) || 1;
+    const c = Math.cos(theta), s = Math.sin(theta);
+    return [(vx / sp) * c - (vy / sp) * s, (vx / sp) * s + (vy / sp) * c];
+  };
+
+  while (events.filter((e) => e.type === "takeoff").length < jumps && tick < cap) {
+    // the landing lockout counts down first, in units of 8 ms, never by 0
+    if (grounded && landTime > 0) {
+      const step = Math.max(1, Math.floor(dt * 1000) >> 3);
+      landTime = step >= landTime ? 0 : landTime - step;
+    }
+    // PM_CheckJump -- clears groundentity before PM_Friction gets a look in
+    if (grounded && landTime === 0) {
+      vz = jumpVelocity;
+      grounded = false;
+      events.push({ type: "takeoff", tick, speed: Math.hypot(vx, vy) });
+      if (airMode === "freeze") frozen = offVelocity(freezeAngle);
+    }
+
+    if (grounded && useFriction) {
+      const sp = Math.hypot(vx, vy);
+      if (sp < 1) { vx = 0; vy = 0; }
+      else {
+        const control = sp < pm_stopspeed ? pm_stopspeed : sp;
+        const drop = control * pm_friction * dt;
+        const scale = Math.max(0, sp - drop) / sp;
+        vx *= scale; vy *= scale;
+      }
+    }
+
+    const accel = grounded ? pm_accelerate : pm_airaccelerate;
+    let w;
+    if (!grounded && airMode === "freeze") w = frozen;
+    else if (grounded && !groundStrafe) {
+      const sp = Math.hypot(vx, vy) || 1;
+      w = [vx / sp, vy / sp]; // straight down your own route: pure hold-W
+    } else {
+      w = offVelocity(chainBestAngle(Math.hypot(vx, vy), push, accel, dt));
+    }
+
+    const current = vx * w[0] + vy * w[1];
+    const addspeed = push - current;
+    if (addspeed > 0) {
+      const accelspeed = Math.min(accel * dt * push, addspeed);
+      vx += accelspeed * w[0];
+      vy += accelspeed * w[1];
+    }
+
+    if (!grounded) {
+      vz -= gravity * dt;
+      z += vz * dt;
+      if (z <= 0) {
+        z = 0;
+        grounded = true;
+        events.push({ type: "touchdown", tick, speed: Math.hypot(vx, vy), landVz: vz });
+        landTime = useLockout ? (vz < -400 ? 25 : vz < -200 ? 18 : 0) : 0;
+        vz = 0;
+      }
+    }
+
+    phases.push(grounded ? "ground" : "air");
+    speeds.push(Math.hypot(vx, vy));
+    tick++;
+  }
+
+  // pair the events up into cycles so the UI can show the ledger
+  const takeoffs = events.filter((e) => e.type === "takeoff");
+  const touchdowns = events.filter((e) => e.type === "touchdown");
+  const cycles = [];
+  for (let i = 0; i < touchdowns.length; i++) {
+    const next = takeoffs[i + 1];
+    cycles.push({
+      takeoff: takeoffs[i].speed,
+      touchdown: touchdowns[i].speed,
+      airTicks: touchdowns[i].tick - takeoffs[i].tick + 1,
+      landVz: touchdowns[i].landVz,
+      relaunch: next ? next.speed : null,
+      groundTicks: next ? next.tick - touchdowns[i].tick : null,
+      airGain: touchdowns[i].speed - takeoffs[i].speed,
+      groundLoss: next ? touchdowns[i].speed - next.speed : null,
+    });
+  }
+  const settled = cycles.filter((c) => c.relaunch !== null);
+  return {
+    speeds, phases, takeoffs, touchdowns, cycles,
+    terminal: settled.length ? settled[settled.length - 1].relaunch : Math.hypot(vx, vy),
+    ticks: tick,
+  };
+}
+
 // The frozen aim that spends the whole 300 budget exactly as the jump ends:
 // solve v0*cos(theta) + a*ticks = push. Anything narrower runs dry early and
 // coasts; anything wider never finishes spending and wastes the width.

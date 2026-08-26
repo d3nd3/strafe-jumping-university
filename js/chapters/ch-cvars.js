@@ -490,6 +490,17 @@ function mountChCvars(section) {
       more than what it does in any one of them. Same <span class="varname">PM_Accelerate</span>,
       run forward in time.
     </p>
+    <p class="muted">
+      Leave <b>real SOF flat ground</b> ticked and it doesn't stop at the landing: it keeps
+      jumping, and <span class="varname">PM_Friction</span> plus the
+      <span class="varname">PMF_TIME_LAND</span> lockout put a hard ceiling on you at around
+      <b>${chainGroundCycles(600, 12, {
+        frametime: CVAR_FRAMETIME, push: pm_maxspeed, gravity: CH7_GRAVITY,
+        jumpVelocity: CH7_JUMP_VELOCITY, airMode: "track",
+      }).terminal.toFixed(0)} u/s</b> — the same wall the Chapter 7 playground runs into. Untick it
+      to see one jump in a vacuum, where nothing ever takes speed back and the numbers climb
+      forever. Both are worth looking at; only one of them is a game.
+    </p>
     <div class="callout">
       <b>The crosshair angle on that dial is not a per-tick delta.</b> It is an absolute angle at an
       instant — where your view sits relative to where you're going. But your velocity rotates
@@ -524,34 +535,56 @@ function mountChCvars(section) {
             <button class="btn" id="cv-j-snap-jump">freeze on the whole-jump best</button>
           </div>
 
-          <div class="hud-group">turn every tick to hold the best angle</div>
-          <div class="hud" style="flex-direction:column">
-            <div class="hud-stat"><span class="k">SPEED AFTER ${CVAR_JUMP_TICKS} TICKS</span><span class="v" id="cv-j-track">—</span></div>
-            <div class="hud-stat"><span class="k">MOUSE TURN RATE IT NEEDS</span><span class="v" id="cv-j-rate">—</span></div>
+          <div class="hud-group">where is this jump happening?</div>
+          <label class="checkrow" for="cv-j-sof">
+            <input type="checkbox" id="cv-j-sof" checked />
+            <span>
+              <b>real SOF flat ground</b>
+              <em id="cv-j-sof-note">landing, PM_Friction and the PMF_TIME_LAND lockout are all on</em>
+            </span>
+          </label>
+          <label class="checkrow" for="cv-j-gstrafe">
+            <input type="checkbox" id="cv-j-gstrafe" checked />
+            <span>
+              <b>keep strafing while grounded</b>
+              <em>instead of just holding W through the lockout</em>
+            </span>
+          </label>
+
+          <div id="cv-j-sof-stats">
+            <div class="hud-group">where flat ground puts your ceiling</div>
+            <div class="hud" style="flex-direction:column">
+              <div class="hud-stat"><span class="k">TERMINAL SPEED — it stops here</span><span class="v" id="cv-j-term">—</span></div>
+              <div class="hud-stat"><span class="k">ONE JUMP GAINS, IN THE AIR</span><span class="v" id="cv-j-airgain">—</span></div>
+              <div class="hud-stat warn"><span class="k">ONE LANDING TAKES BACK</span><span class="v" id="cv-j-gloss">—</span></div>
+              <div class="hud-stat warn"><span class="k">TICKS GLUED TO THE FLOOR</span><span class="v" id="cv-j-gticks">—</span></div>
+              <div class="hud-stat"><span class="k">CYCLE LENGTH</span><span class="v" id="cv-j-cycle">—</span></div>
+            </div>
           </div>
-          <div class="hud-group">or aim once and never move again</div>
-          <div class="hud" style="flex-direction:column">
-            <div class="hud-stat"><span class="k">SPEED AFTER ${CVAR_JUMP_TICKS} TICKS</span><span class="v" id="cv-j-frozen">—</span></div>
-            <div class="hud-stat warn"><span class="k">TICKS THAT ACTUALLY GAINED</span><span class="v" id="cv-j-live">—</span></div>
-            <div class="hud-stat"><span class="k">FROZEN vs TRACKING, ON SPEED GAINED</span><span class="v" id="cv-j-frac">—</span></div>
-          </div>
-          <div class="hud-group">how much you'll have turned by landing</div>
-          <div class="hud" style="flex-direction:column">
-            <div class="hud-stat"><span class="k">YOUR ROUTE SWINGS — tracking / frozen</span><span class="v" id="cv-j-head">—</span></div>
+
+          <div id="cv-j-air-stats">
+            <div class="hud-group">turn every tick to hold the best angle</div>
+            <div class="hud" style="flex-direction:column">
+              <div class="hud-stat"><span class="k">SPEED AFTER ${CVAR_JUMP_TICKS} TICKS</span><span class="v" id="cv-j-track">—</span></div>
+              <div class="hud-stat"><span class="k">MOUSE TURN RATE IT NEEDS</span><span class="v" id="cv-j-rate">—</span></div>
+            </div>
+            <div class="hud-group">or aim once and never move again</div>
+            <div class="hud" style="flex-direction:column">
+              <div class="hud-stat"><span class="k">SPEED AFTER ${CVAR_JUMP_TICKS} TICKS</span><span class="v" id="cv-j-frozen">—</span></div>
+              <div class="hud-stat warn"><span class="k">TICKS THAT ACTUALLY GAINED</span><span class="v" id="cv-j-live">—</span></div>
+              <div class="hud-stat"><span class="k">FROZEN vs TRACKING, ON SPEED GAINED</span><span class="v" id="cv-j-frac">—</span></div>
+            </div>
+            <div class="hud-group">how much you'll have turned by landing</div>
+            <div class="hud" style="flex-direction:column">
+              <div class="hud-stat"><span class="k">YOUR ROUTE SWINGS — tracking / frozen</span><span class="v" id="cv-j-head">—</span></div>
+            </div>
           </div>
         </div>
         <div class="panel-col" style="flex:1 1 380px;min-width:320px">
           <canvas class="scene" id="cv-jump" style="height:300px"></canvas>
-          <div class="legend">
-            <span><span class="swatch" style="background:#7dffb0"></span>turning every tick</span>
-            <span><span class="swatch" style="background:#ffc857"></span>frozen aim</span>
-            <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>ticks worth nothing</span>
-          </div>
+          <div class="legend" id="cv-jump-legend"></div>
           <canvas class="scene" id="cv-budget" style="height:260px;margin-top:16px"></canvas>
-          <div class="legend">
-            <span><span class="swatch" style="background:#5fb4ff"></span>currentspeed = velocity · wishdir</span>
-            <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>wishspeed 300 — the ceiling on it</span>
-          </div>
+          <div class="legend" id="cv-budget-legend"></div>
         </div>
       </div>
     </div>
@@ -596,14 +629,7 @@ function mountChCvars(section) {
     <div class="panel">
       <table class="cvar-table mono" id="cv-freeze-table">
         <thead>
-          <tr>
-            <td class="l">freeze your aim at</td>
-            <td>ticks that gained</td>
-            <td>speed at landing</td>
-            <td>gain</td>
-            <td>vs tracking</td>
-            <td>route swings</td>
-          </tr>
+          <tr id="cv-freeze-head"></tr>
         </thead>
         <tbody id="cv-freeze-rows"></tbody>
       </table>
@@ -627,6 +653,46 @@ function mountChCvars(section) {
       which is why the strongest players track hard through the middle of a flight and let the aim
       settle before the landing.
     </div>
+
+    ${(() => {
+      const base = {
+        frametime: CVAR_FRAMETIME, push: pm_maxspeed, gravity: CH7_GRAVITY,
+        jumpVelocity: CH7_JUMP_VELOCITY,
+      };
+      const T = (o) => chainGroundCycles(600, 12, { ...base, ...o }).terminal;
+      const track = T({ airMode: "track" });
+      const froz = T({ airMode: "freeze", freezeAngle: chainFreezeAngleFor(600, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) });
+      const tick1 = T({ airMode: "freeze", freezeAngle: chainBestAngle(600, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) });
+      const holdW = T({ airMode: "track", groundStrafe: false });
+      return `
+    <div class="mystery">
+      <b>Now tick the ground back on, because it reorders everything this chapter just told you.</b>
+      On flat ground the air technique stops mattering very much. Perfect tracking settles at
+      <b>${track.toFixed(1)}</b>. A well-chosen frozen aim settles at <b>${froz.toFixed(1)}</b>.
+      Frozen on the one-tick best angle — the setting that was worth a catastrophic <em>one useful
+      tick out of ${CVAR_JUMP_TICKS}</em> a moment ago — still settles at <b>${tick1.toFixed(1)}</b>.
+      That is a spread of about <b>${(((track - tick1) / track) * 100).toFixed(0)}%</b> across the
+      entire range of air technique, and the reason is the feedback: a lower take-off speed means
+      friction's fixed <b>${(pm_friction * CVAR_FRAMETIME * 100).toFixed(0)}%</b> a tick takes
+      proportionally less back, so the equilibrium slides down to meet you.
+      <br /><br />
+      Meanwhile the thing nobody talks about is worth
+      <b>${(((track - holdW) / track) * 100).toFixed(0)}%</b>: whether you keep strafing during the
+      ticks you are locked to the floor. Hold W through the lockout and your ceiling falls from
+      <b>${track.toFixed(0)}</b> to <b>${holdW.toFixed(0)}</b> — because above
+      <span class="varname">wishspeed</span> your own velocity has already passed it, ground
+      <span class="varname">PM_Accelerate</span> returns on <span class="varname">addspeed</span>
+      immediately, and friction runs completely unopposed. Untick <b>keep strafing while
+      grounded</b> and watch a quarter of your speed disappear.
+      <br /><br />
+      So the honest ranking on flat ground, by what it is actually worth: <b>keep strafing on the
+      floor</b> first, then <b>don't land hard</b> (Chapter 11's whole subject — the lockout is what
+      hands friction those ticks in the first place), and only then <b>the aim technique this
+      chapter is about</b>. The angle work pays where the ground stops interrupting: ramps, drops,
+      long flights, and any route where you spend more time airborne than grounded. That is not a
+      reason to skip it. It is a reason to know which one you're being limited by.
+    </div>`;
+    })()}
 
     <h2>So why is sideways-bigger-than-forward genuinely better?</h2>
     <p class="muted">
@@ -714,6 +780,20 @@ function mountChCvars(section) {
   const jHeadEl = section.querySelector("#cv-j-head");
   const jumpNote = section.querySelector("#cv-jump-note");
   const freezeRows = section.querySelector("#cv-freeze-rows");
+  const freezeHead = section.querySelector("#cv-freeze-head");
+  const jSofInput = section.querySelector("#cv-j-sof");
+  const jSofNote = section.querySelector("#cv-j-sof-note");
+  const gStrafeInput = section.querySelector("#cv-j-gstrafe");
+  const gStrafeRow = gStrafeInput.closest(".checkrow");
+  const jSofStats = section.querySelector("#cv-j-sof-stats");
+  const jAirStats = section.querySelector("#cv-j-air-stats");
+  const jTermEl = section.querySelector("#cv-j-term");
+  const jAirGainEl = section.querySelector("#cv-j-airgain");
+  const jGLossEl = section.querySelector("#cv-j-gloss");
+  const jGTicksEl = section.querySelector("#cv-j-gticks");
+  const jCycleEl = section.querySelector("#cv-j-cycle");
+  const jumpLegend = section.querySelector("#cv-jump-legend");
+  const budgetLegend = section.querySelector("#cv-budget-legend");
 
   const engineInput = section.querySelector("#cv-engine");
   const engineNote = section.querySelector("#cv-engine-note");
@@ -1344,6 +1424,126 @@ function mountChCvars(section) {
       ax.padL + 6, h - ax.padB - 12);
   }
 
+  // ---- flat ground: many cycles, and the ledger that stops them ------------
+  function drawCycles(c, frozen) {
+    const { ctx, w, h } = fit(jumpCanvas);
+    const padL = 52, padR = 14, padT = 16, padB = 30;
+    const n = Math.max(c.speeds.length, frozen.speeds.length) - 1;
+    const all = c.speeds.concat(frozen.speeds);
+    const lo = Math.min(...all) - 8;
+    const hi = Math.max(...all) + 8;
+    const xOf = (t) => padL + (t / n) * (w - padL - padR);
+    const yOf = (v) => h - padB - ((v - lo) / (hi - lo)) * (h - padT - padB);
+
+    // every stretch you spend on the floor, where friction is running
+    ctx.fillStyle = "rgba(255,90,90,0.13)";
+    let runStart = -1;
+    c.phases.forEach((p, i) => {
+      if (p === "ground" && runStart < 0) runStart = i;
+      if ((p !== "ground" || i === c.phases.length - 1) && runStart >= 0) {
+        ctx.fillRect(xOf(runStart), padT, Math.max(1, xOf(i) - xOf(runStart)), h - padT - padB);
+        runStart = -1;
+      }
+    });
+
+    ctx.font = "11px monospace";
+    for (let i = 0; i <= 4; i++) {
+      const v = lo + ((hi - lo) * i) / 4;
+      const y = yOf(v);
+      ctx.strokeStyle = "rgba(255,255,255,0.07)";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+      ctx.fillStyle = "#8fa89a";
+      ctx.textAlign = "right";
+      ctx.fillText(v.toFixed(0), padL - 6, y + 4);
+    }
+    ctx.textAlign = "left";
+
+    // the ceilings the two strategies settle on
+    const terminalLine = (v, color) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padL, yOf(v));
+      ctx.lineTo(w - padR, yOf(v));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    terminalLine(frozen.terminal, "rgba(255,200,87,0.45)");
+    terminalLine(c.terminal, "rgba(125,255,176,0.6)");
+
+    const line = (run, color, width) => {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      run.speeds.forEach((v, i) => {
+        const x = xOf(i), y = yOf(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    };
+    line(frozen, "#ffc857", 1.8);
+    line(c, "#7dffb0", 2);
+
+    // The two terminals can sit a few u/s apart, so their labels would collide
+    // on the lines themselves. Stack them in the top-right, which the curves
+    // vacate as soon as the speed settles.
+    ctx.textAlign = "right";
+    const rx = w - padR - 8;
+    ctx.fillStyle = "#7dffb0";
+    ctx.fillText("tracking settles at " + c.terminal.toFixed(1), rx, padT + 12);
+    ctx.fillStyle = "#ffc857";
+    ctx.fillText("frozen aim settles at " + frozen.terminal.toFixed(1), rx, padT + 26);
+    ctx.fillStyle = "rgba(255,120,120,0.9)";
+    ctx.fillText("shaded = grounded, PM_Friction running", rx, padT + 40);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#8fa89a";
+    ctx.textAlign = "center";
+    ctx.fillText("ticks — " + c.cycles.length + " jumps, take-off to take-off",
+      (padL + w - padR) / 2, h - 4);
+    ctx.textAlign = "left";
+  }
+
+  function drawLedger(c) {
+    const { ctx, w, h } = fit(budgetCanvas);
+    const padL = 52, padR = 14, padT = 20, padB = 32;
+    const rows = c.cycles.filter((x) => x.groundLoss !== null);
+    if (!rows.length) return;
+    const mag = Math.max(...rows.map((r) => Math.max(r.airGain, r.groundLoss))) * 1.15;
+    const mid = (padT + h - padB) / 2;
+    const half = (h - padT - padB) / 2;
+    const bw = Math.max(3, ((w - padL - padR) / rows.length) * 0.34);
+    const xOf = (i) => padL + ((i + 0.5) / rows.length) * (w - padL - padR);
+    const yOf = (v) => mid - (v / mag) * half;
+
+    ctx.strokeStyle = "rgba(234,255,242,0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(padL, mid); ctx.lineTo(w - padR, mid); ctx.stroke();
+
+    rows.forEach((r, i) => {
+      const x = xOf(i);
+      ctx.fillStyle = "#7dffb0";
+      ctx.fillRect(x - bw, yOf(r.airGain), bw, mid - yOf(r.airGain));
+      ctx.fillStyle = "#ff6b6b";
+      ctx.fillRect(x, mid, bw, yOf(-r.groundLoss) - mid);
+    });
+
+    ctx.font = "11px monospace";
+    ctx.fillStyle = "#7dffb0";
+    ctx.fillText("+ the air gives", padL + 6, padT + 2);
+    ctx.fillStyle = "#ff6b6b";
+    ctx.fillText("− the landing takes", padL + 6, h - padB - 4);
+    ctx.fillStyle = "#8fa89a";
+    ctx.textAlign = "right";
+    ctx.fillText("±" + mag.toFixed(0) + " u/s", padL - 6, padT + 6);
+    ctx.fillText("0", padL - 6, mid + 4);
+    ctx.textAlign = "center";
+    ctx.fillText("one bar pair per jump — they close until they cancel",
+      (padL + w - padR) / 2, h - 6);
+    ctx.textAlign = "left";
+  }
+
   function render() {
     const fwd = +fwdInput.value;
     const side = +sideInput.value;
@@ -1487,11 +1687,136 @@ function mountChCvars(section) {
   const jumpRun = (start, mode, ang) =>
     chainJumpRun(start, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME, mode, ang);
 
+  const LEGEND_AIR_SPEED =
+    `<span><span class="swatch" style="background:#7dffb0"></span>turning every tick</span>
+     <span><span class="swatch" style="background:#ffc857"></span>frozen aim</span>
+     <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>ticks worth nothing</span>`;
+  const LEGEND_AIR_BUDGET =
+    `<span><span class="swatch" style="background:#5fb4ff"></span>currentspeed = velocity · wishdir</span>
+     <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>wishspeed 300 — the ceiling on it</span>`;
+  const LEGEND_SOF_SPEED =
+    `<span><span class="swatch" style="background:#7dffb0"></span>your speed, jump after jump</span>
+     <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>grounded — PM_Friction is running</span>`;
+  const LEGEND_SOF_LEDGER =
+    `<span><span class="swatch" style="background:#7dffb0"></span>gained in the air</span>
+     <span><span class="swatch" style="background:#ff6b6b"></span>taken back by the landing</span>`;
+
+  // The whole-jump demo has two worlds: one jump in a vacuum, or SOF's actual
+  // flat ground. The second one has a ceiling and the first one doesn't, which
+  // is the entire reason the tick-box exists.
+  function renderJumpSof() {
+    const start = +jSpeedInput.value;
+    const ang = +jAngInput.value / DEG;
+    const cycleOpts = {
+      frametime: CVAR_FRAMETIME,
+      push: pm_maxspeed,
+      gravity: CH7_GRAVITY,
+      jumpVelocity: CH7_JUMP_VELOCITY,
+      airMode: "track",
+      freezeAngle: ang,
+      groundStrafe: gStrafeInput.checked,
+    };
+    const c = chainGroundCycles(start, 12, cycleOpts);
+    const frozenRun = chainGroundCycles(start, 12, { ...cycleOpts, airMode: "freeze" });
+    const settled = c.cycles.filter((x) => x.groundLoss !== null);
+    const last = settled[settled.length - 1] || c.cycles[0];
+
+    jTermEl.textContent = c.terminal.toFixed(1) + " u/s";
+    jAirGainEl.textContent = "+" + last.airGain.toFixed(1) + " u/s";
+    jGLossEl.textContent = "−" + (last.groundLoss || 0).toFixed(1) + " u/s";
+    jGTicksEl.textContent = (last.groundTicks || 0) + " ticks";
+    jCycleEl.textContent =
+      last.airTicks + " air + " + (last.groundTicks || 0) + " ground = " +
+      ((last.airTicks + (last.groundTicks || 0)) * CVAR_FRAMETIME).toFixed(2) + " s";
+
+    const noLock = chainGroundCycles(start, 12, { ...cycleOpts, lockout: false });
+    const noFric = chainGroundCycles(start, 12, { ...cycleOpts, friction: false });
+
+    jumpNote.innerHTML = `
+      On flat ground it stops. From ${start} u/s this settles at
+      <b>${c.terminal.toFixed(1)} u/s</b> and stays there, because the ledger balances: the air
+      hands you <b>+${last.airGain.toFixed(1)}</b> over ${last.airTicks} ticks, and the landing
+      takes <b>−${(last.groundLoss || 0).toFixed(1)}</b> back over ${last.groundTicks} ticks glued
+      to the floor. That is the ceiling you remember from the Chapter 7 playground, and it needs
+      <em>both</em> mechanics. Take either one away and there is no ceiling left to find: over these
+      same ${c.cycles.length} jumps, no lockout gets you to <b>${noLock.terminal.toFixed(0)}</b> and
+      no friction gets you to <b>${noFric.terminal.toFixed(0)}</b> — and neither has settled, they
+      are both still climbing when the chart runs out.
+      <br /><br />
+      The reason it's a ceiling and not a tax is that the two scale differently.
+      <span class="varname">PM_Friction</span> takes
+      <b>pm_friction × frametime = ${(pm_friction * CVAR_FRAMETIME * 100).toFixed(0)}%</b> of your
+      speed per grounded tick — a <em>proportion</em>, so it bites harder the faster you go. The air
+      hands back a fixed <b>1791</b> of speed² per tick no matter how fast you are. One grows with
+      speed, the other doesn't, so they cross exactly once.
+      <br /><br />
+      ${gStrafeInput.checked
+        ? `And you are still strafing through the lockout, which is doing a lot of work:
+           <span class="varname">PM_Accelerate</span> on the ground runs at
+           <span class="varname">pm_accelerate ${pm_accelerate}</span>, ten times the air value, so
+           it claws back <b>${(pm_accelerate * CVAR_FRAMETIME * pm_maxspeed).toFixed(0)} u/s</b> per
+           tick along your wishdir. Untick <b>keep strafing while grounded</b> and watch what
+           holding W alone costs you.`
+        : `<b>And here is what holding W through the lockout costs.</b> Above 300 u/s your own
+           velocity is already past <span class="varname">wishspeed</span>, so
+           <span class="varname">addspeed</span> is negative and ground
+           <span class="varname">PM_Accelerate</span> returns without doing anything at all. Friction
+           runs unopposed for the whole lockout, and your ceiling collapses to
+           <b>${c.terminal.toFixed(0)}</b>. Tick it back on to get
+           <b>${chainGroundCycles(start, 12, { ...cycleOpts, groundStrafe: true }).terminal.toFixed(0)}</b>.`}`;
+
+    // the freeze-angle table now reports terminal speeds, not one-jump gains
+    const bestNow = chainBestAngle(start, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME);
+    const freezeBest = chainFreezeAngleFor(start, CVAR_JUMP_TICKS, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME);
+    const trackTerm = chainGroundCycles(start, 12, { ...cycleOpts, airMode: "track" }).terminal;
+    // the tags name what each angle was optimal FOR at the take-off speed on the
+    // slider; the sim then settles somewhere else entirely, which is the point
+    freezeRows.innerHTML = [
+      { a: bestNow * DEG, tag: `one-tick best at ${start} u/s` },
+      { a: bestNow * DEG + 10, tag: "10° wider than that" },
+      { a: freezeBest * DEG, tag: `whole-jump best at ${start} u/s` },
+      { a: 90, tag: "straight across your route" },
+    ].map((r) => {
+      const run = chainGroundCycles(start, 12, { ...cycleOpts, airMode: "freeze", freezeAngle: r.a / DEG });
+      const s = run.cycles.filter((x) => x.groundLoss !== null).pop();
+      return `<tr>
+        <td class="l">${r.a.toFixed(1)}° <span style="color:var(--text-dim)">— ${r.tag}</span></td>
+        <td>${s ? s.airTicks : "—"}</td>
+        <td class="hot">${run.terminal.toFixed(1)}</td>
+        <td>+${s ? s.airGain.toFixed(1) : "0"}</td>
+        <td>${((run.terminal / trackTerm) * 100).toFixed(0)}%</td>
+        <td>${s ? "−" + (s.groundLoss || 0).toFixed(1) : "—"}</td>
+      </tr>`;
+    }).join("");
+    freezeHead.innerHTML = `
+      <td class="l">freeze your aim at</td><td>air ticks</td><td>terminal speed</td>
+      <td>air gain / jump</td><td>vs tracking</td><td>landing costs</td>`;
+
+    drawCycles(c, frozenRun);
+    drawLedger(c);
+  }
+
   function renderJump() {
+    jSpeedVal.textContent = jSpeedInput.value;
+    jAngVal.textContent = (+jAngInput.value).toFixed(1) + "°";
+    jSofStats.style.display = jSofInput.checked ? "" : "none";
+    jAirStats.style.display = jSofInput.checked ? "none" : "";
+    gStrafeRow.style.display = jSofInput.checked ? "" : "none";
+    jSofNote.textContent = jSofInput.checked
+      ? "landing, PM_Friction and the PMF_TIME_LAND lockout are all on"
+      : "off — one jump in a vacuum, nothing ever takes speed back";
+    jumpLegend.innerHTML = jSofInput.checked ? LEGEND_SOF_SPEED : LEGEND_AIR_SPEED;
+    budgetLegend.innerHTML = jSofInput.checked ? LEGEND_SOF_LEDGER : LEGEND_AIR_BUDGET;
+    if (jSofInput.checked) return renderJumpSof();
+
     const start = +jSpeedInput.value;
     const ang = +jAngInput.value / DEG;
     jSpeedVal.textContent = start;
     jAngVal.textContent = (+jAngInput.value).toFixed(1) + "°";
+
+    freezeHead.innerHTML = `
+      <td class="l">freeze your aim at</td><td>ticks that gained</td><td>speed at landing</td>
+      <td>gain</td><td>vs tracking</td><td>route swings</td>`;
 
     const track = jumpRun(start, "track", 0);
     const frozen = jumpRun(start, "freeze", ang);
@@ -1563,6 +1888,8 @@ function mountChCvars(section) {
 
   jSpeedInput.addEventListener("input", renderJump);
   jAngInput.addEventListener("input", renderJump);
+  jSofInput.addEventListener("change", renderJump);
+  gStrafeInput.addEventListener("change", renderJump);
   section.querySelector("#cv-j-snap-tick").addEventListener("click", () => {
     jAngInput.value = (chainBestAngle(+jSpeedInput.value, pm_maxspeed, pm_airaccelerate, CVAR_FRAMETIME) * DEG).toFixed(1);
     renderJump();

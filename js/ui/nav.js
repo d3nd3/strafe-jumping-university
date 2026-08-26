@@ -79,53 +79,47 @@ function createNav(chapters) {
     items.forEach((it, i) => it.classList.toggle("open", i === idx));
   }
 
+  // Scroll-spy for both chapters and sub-chapters: whichever section/heading
+  // has most recently crossed a line near the top of the viewport is
+  // "current." This is computed directly off getBoundingClientRect rather
+  // than IntersectionObserver ratio thresholds, because a ratio-threshold
+  // observer (e.g. threshold: [0.3, 0.5, 0.7]) never fires for a section
+  // taller than viewport/threshold — which several multi-<h2> chapters are —
+  // leaving them permanently "inactive" and their sub-chapter list stuck
+  // collapsed even while scrolled deep inside them.
   const sections = chapters.map((c) => document.getElementById(c.id));
-  const observer = new IntersectionObserver(
-    (entries) => {
-      let best = null;
-      for (const e of entries) {
-        if (e.isIntersecting && (!best || e.intersectionRatio > best.intersectionRatio)) best = e;
-      }
-      if (best) {
-        const idx = sections.indexOf(best.target);
-        if (idx >= 0) setActive(idx);
-      }
-    },
-    { threshold: [0.3, 0.5, 0.7] }
-  );
-  sections.forEach((s) => s && observer.observe(s));
-
-  // Finer-grained spy for sub-chapters: whichever heading has most recently
-  // crossed a line near the top of the viewport is "current." Recomputed
-  // directly off getBoundingClientRect on scroll rather than another
-  // IntersectionObserver, since we need "last one passed," not "intersecting."
   const subEls = chapters.flatMap((c) => c.subs.map((s) => document.getElementById(s.id)));
-  if (subEls.length) {
-    const LINE = 140;
-    let ticking = false;
-    const updateActiveSub = () => {
-      let current = null;
-      for (const el of subEls) {
-        if (el && el.getBoundingClientRect().top <= LINE) current = el;
-      }
-      subLinks.forEach((l) =>
-        l.classList.toggle("active", !!current && l.dataset.sub === current.id)
-      );
-    };
-    window.addEventListener(
-      "scroll",
-      () => {
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(() => {
-          updateActiveSub();
-          ticking = false;
-        });
-      },
-      { passive: true }
+  const LINE = 140;
+  let ticking = false;
+  const updateActive = () => {
+    let currentSection = sections[0];
+    for (const el of sections) {
+      if (el && el.getBoundingClientRect().top <= LINE) currentSection = el;
+    }
+    const idx = sections.indexOf(currentSection);
+    if (idx >= 0) setActive(idx);
+
+    let currentSub = null;
+    for (const el of subEls) {
+      if (el && el.getBoundingClientRect().top <= LINE) currentSub = el;
+    }
+    subLinks.forEach((l) =>
+      l.classList.toggle("active", !!currentSub && l.dataset.sub === currentSub.id)
     );
-    updateActiveSub();
-  }
+  };
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        updateActive();
+        ticking = false;
+      });
+    },
+    { passive: true }
+  );
+  updateActive();
 
   document.addEventListener("keydown", (e) => {
     if (e.target.matches("input, textarea")) return;
@@ -139,6 +133,5 @@ function createNav(chapters) {
     }
   });
 
-  setActive(0);
   return { setActive };
 }

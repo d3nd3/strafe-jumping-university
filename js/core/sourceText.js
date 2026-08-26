@@ -273,13 +273,21 @@ function* pmAirMoveSteps(state, cmd, frametime) {
 }
 `);
 
+// NOTE: every c/js array here is a complete, explicit list of the line
+// numbers to highlight -- codePanel.js's highlightLines() (and ch4's
+// renderStatic()) both do exact membership lookups per line, not a
+// [start, end] range expansion. A 2-element array only "looks like" a
+// range when the two lines happen to be consecutive; write out every real
+// line in between for anything wider (this bit several entries below,
+// most visibly the #ifdef SOF-wrapped "basis" step, which used to light up
+// only the #ifdef/#endif lines and skip the actual code between them).
 const AIR_MOVE_MAP = {
-  basis: { c: [598, 603], js: [2] },
-  wishvel: { c: [605, 607], js: [4, 5, 6, 7, 8, 9] },
+  basis: { c: [598, 599, 600, 601, 602, 603], js: [2] },
+  wishvel: { c: [605, 606, 607], js: [4, 5, 6, 7, 8, 9] },
   wishdir: { c: [611, 612], js: [11, 12] },
-  "clamp-maxspeed": { c: [619, 623], js: [14, 15, 16, 17] },
-  branch: { c: [666, 669], js: [22, 23, 24, 25, 26] },
-  done: { c: [671, 673], js: [29] },
+  "clamp-maxspeed": { c: [619, 621, 623, 624], js: [14, 15, 16, 17] },
+  branch: { c: [666, 667, 668, 669, 670], js: [22, 23, 24, 25, 26] },
+  done: { c: [671, 672, 673], js: [29] },
 };
 
 // Plain-English descriptions for PM_AirMove's own steps -- the code that

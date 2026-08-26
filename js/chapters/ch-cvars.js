@@ -155,6 +155,10 @@ function mountChCvars(section) {
     </div>
 
     <h2>Same ratio, doubled, tripled, tenfold — watch it stop moving</h2>
+    <p class="muted">
+      Every number in this table is SOF's chain, all five steps. Quake&nbsp;II has no ② and no ③,
+      so none of this happens there — the interactive dial below can run either.
+    </p>
     <div class="panel">
       <table class="cvar-table mono">
         <thead>
@@ -216,6 +220,13 @@ function mountChCvars(section) {
       travelling</b>, which is pinned pointing right. Move the sliders to change your config, and
       <b>drag inside the dial to aim your mouse</b>.
     </p>
+    <p class="muted">
+      By default it runs your two numbers through <b>SOF's</b> five-step chain — the one taken apart
+      above. Untick <b>SOF's client chain</b> to push the identical config through <b>stock Quake
+      II</b> instead, where steps ② and ③ simply don't exist. Either way the strip underneath the
+      dial lists every intermediate value the picture was drawn from, with the steps that didn't run
+      struck through.
+    </p>
 
     <div class="panel">
       <div class="panel-row">
@@ -234,9 +245,16 @@ function mountChCvars(section) {
           </div>
           <div class="btn-row" id="cv-presets" style="flex-wrap:wrap"></div>
 
-          <div class="mono" style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:-6px">
-            where is your mouse pointing?
-          </div>
+          <div class="hud-group">which client processes your keys?</div>
+          <label class="checkrow" for="cv-engine">
+            <input type="checkbox" id="cv-engine" checked />
+            <span>
+              <b>SOF's client chain</b>
+              <em id="cv-engine-note">steps ② and ③ on: diagonal shrink, then the 200/160 trim</em>
+            </span>
+          </label>
+
+          <div class="hud-group">where is your mouse pointing?</div>
           <div class="btn-row">
             <button class="btn" id="cv-aim-best">aiming perfectly</button>
             <button class="btn" id="cv-aim-straight">not turning at all</button>
@@ -263,6 +281,9 @@ function mountChCvars(section) {
             <span><span class="swatch" style="background:#5fb4ff"></span>push — where the keys shove you</span>
             <span><span class="swatch" style="background:rgba(255,90,90,0.55)"></span>dead cone — push lands in here, you gain zero</span>
           </div>
+
+          <div class="pipe-head mono">what the dial above is actually drawing</div>
+          <div class="pipeline mono" id="cv-pipe"></div>
         </div>
       </div>
 
@@ -322,6 +343,51 @@ function mountChCvars(section) {
     </div>
 
     <div class="callout good" id="cv-explain">—</div>
+
+    <div class="callout">
+      <b>What that tick-box actually turns off.</b> Two of the five steps are SOF's own and have no
+      Quake&nbsp;II counterpart: step ② (<span class="varname">CL_FinishMove</span>'s diagonal
+      shrink, which Q2 never had — diagonals really are faster there) and step ③
+      (<span class="varname">PAK_WriteDeltaUsercmd</span>'s 200/160 per-axis trim — Q2 ships
+      <span class="varname">MSG_WriteDeltaUsercmd</span>, which writes both as plain shorts and
+      clamps nothing; that function is still sitting in the SOF binary with zero callers). Step ④'s
+      run doubling exists in both, just in different places — Q2 does it client-side at the end of
+      <span class="varname">CL_BaseMove</span>, SOF does it server-side in
+      <span class="varname">ClientThink</span>, after the trim.
+      <br /><br />
+      So under Q2 rules your key angle is <em>exactly</em>
+      <span class="varname">atan2(cl_sidespeed, cl_forwardspeed)</span> for every config that ever
+      existed, and nothing can rotate it. Under SOF rules that only holds until the trim starts
+      biting. Where they agree and where they don't:
+      <table class="cvar-table mono" style="margin-top:12px">
+        <thead>
+          <tr><td class="l">you type</td><td>SOF key angle</td><td>Q2 key angle</td><td class="l">why</td></tr>
+        </thead>
+        <tbody>
+          ${[
+            [150, 170, "no trim — the shrink lands it under both caps; the 0.01° is truncation"],
+            [150, 200, "no trim — the shrink lands exactly on the 160 cap, nothing to cut"],
+            [400, 400, "SOF's trim drags it to 200/160; Q2 keeps your 1:1"],
+            [150, 300, "SOF trims sideways hard and rotates you back narrower"],
+            [1500, 1700, "SOF has parked at 200/160; Q2 still honours the ratio you typed"],
+          ].map(([f, s, why]) => {
+            const a = cmdChain(f, s);
+            const b = cmdChain(f, s, { engine: "q2" });
+            const same = Math.abs(a.keyAngle - b.keyAngle) < 0.005;
+            return `<tr>
+              <td class="l">${f} / ${s}</td>
+              <td class="${same ? "" : "hot"}">${cvarFmtDeg(a.keyAngle)}</td>
+              <td class="${same ? "" : "hot"}">${cvarFmtDeg(b.keyAngle)}</td>
+              <td class="l" style="color:var(--text-dim);font-size:12px">${why}</td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+      <br />
+      Note what the last row means: <em>in Quake II, typing bigger numbers at the same ratio really
+      does keep your angle.</em> The thing this chapter opened with — that it stops mattering — is
+      SOF's trim, and nothing else.
+    </div>
 
     <div class="mystery">
       <b>The one number on this dial your config does <em>not</em> set is the angle between your
@@ -457,6 +523,14 @@ function mountChCvars(section) {
   const cliff = section.querySelector("#cv-cliff");
   const aimBestBtn = section.querySelector("#cv-aim-best");
   const aimStraightBtn = section.querySelector("#cv-aim-straight");
+  const engineInput = section.querySelector("#cv-engine");
+  const engineNote = section.querySelector("#cv-engine-note");
+  const pipeEl = section.querySelector("#cv-pipe");
+
+  // Which client is chewing on your two numbers. Everything interactive in this
+  // chapter reads this, so a reader can never be unsure which chain a picture is
+  // drawing -- it is on the checkbox, on the dial, and in the strip underneath.
+  const engineOpts = () => ({ engine: engineInput.checked ? "sof" : "q2" });
 
   // Where the mouse is pointing. This is deliberately NOT something the cvars
   // decide -- the single most common misreading of this dial is taking the
@@ -741,7 +815,8 @@ function mountChCvars(section) {
     ctx.fillStyle = "#8fa89a";
     ctx.fillText("top-down · you are the dot · " + m.speed.toFixed(0) + " u/s · dead cone ±" + cvarFmtDeg(m.dead), 10, 16);
     ctx.fillStyle = "rgba(255,200,87,0.9)";
-    ctx.fillText("your cvars set ONE thing here: the V is welded open at " + cvarFmtDeg(Math.abs(m.key)), 10, 32);
+    ctx.fillText((m.engine === "sof" ? "SOF chain" : "QUAKE II chain") +
+      " · your cvars set ONE thing here: the V, welded open at " + cvarFmtDeg(Math.abs(m.key)), 10, 32);
     // where the V is pointed is the mouse's doing, so say so on every frame
     ctx.fillStyle = m.mode === "straight" ? "rgba(255,120,120,0.95)" : "rgba(143,168,154,0.85)";
     ctx.fillText(
@@ -769,17 +844,20 @@ function mountChCvars(section) {
     ctx.strokeRect(mx + 0.5, my + 0.5, mw - 1, mh - 1);
 
     ctx.font = "11px monospace";
+    const meterRight = inDead
+      ? "ZERO — push is inside the dead cone"
+      : gain <= 0
+        ? gain.toFixed(2) + " u/s — the push is behind you, this is braking"
+        : "+" + gain.toFixed(2) + " u/s  (" + (frac * 100).toFixed(0) + "% of best)";
+    // the caption gives way to the number when the canvas gets narrow
+    const room = mw - ctx.measureText(meterRight).width - 16;
+    const meterLeft = ["speed gained this tick, aiming as drawn", "gained this tick", ""]
+      .find((t) => ctx.measureText(t).width <= room);
     ctx.fillStyle = "#8fa89a";
-    ctx.fillText("speed gained this tick, aiming as drawn", mx, my - 6);
+    ctx.fillText(meterLeft, mx, my - 6);
     ctx.textAlign = "right";
     ctx.fillStyle = inDead || gain <= 0 ? "#ff6b6b" : "#7dffb0";
-    ctx.fillText(
-      inDead
-        ? "ZERO — push is inside the dead cone"
-        : gain <= 0
-          ? gain.toFixed(2) + " u/s — the push is behind you, this is braking"
-          : "+" + gain.toFixed(2) + " u/s  (" + (frac * 100).toFixed(0) + "% of best)",
-      mx + mw, my - 6);
+    ctx.fillText(meterRight, mx + mw, my - 6);
     ctx.textAlign = "left";
   }
 
@@ -824,7 +902,8 @@ function mountChCvars(section) {
       ctx.setLineDash([]);
     };
 
-    const ref = cmdChain(200, 160);
+    // the same engine as the main curve, so it stays an apples-to-apples compare
+    const ref = cmdChain(200, 160, engineOpts());
     curve(ref.keyAngle, ref.push, "rgba(255,255,255,0.35)", 1.5, [3, 3]);
     curve(m.key, m.push, "#ffc857", 2.5);
 
@@ -909,6 +988,45 @@ function mountChCvars(section) {
     ctx.fillText("zero", padL + 8, h - padB - 8);
   }
 
+  // The live "here is every number the dial is standing on" strip. This exists
+  // so nobody has to guess whether a picture came out of SoF's chain or Q2's:
+  // the steps that didn't run are struck through and say why.
+  function drawPipeline(chain) {
+    const sof = chain.engine === "sof";
+    const pair = (o) => o.f + " / " + o.s;
+    const row = (cls, step, val, note) =>
+      `<div class="pipe-row ${cls}"><span class="s">${step}</span><span class="v">${val}</span><span class="n">${note}</span></div>`;
+
+    const bothKeys = chain.typed.f !== 0 && chain.typed.s !== 0;
+    const rows = [
+      row("", "you typed", pair(chain.typed), "① CL_BaseMove — cvar to short"),
+      chain.normalized
+        ? row("", "② shrink diagonal", pair(chain.normalized),
+            `CL_FinishMove — length cut to max(f,s) = ${Math.max(chain.typed.f, chain.typed.s)}`)
+        : row("skipped", "② shrink diagonal", pair(chain.typed),
+            sof
+              ? (bothKeys ? "skipped — needs both axes" : "skipped — only one key held")
+              : "does not exist in Quake II"),
+      chain.trimmed
+        ? row("hot", "③ per-axis trim", pair(chain.wire),
+            chain.rotatedByClamp
+              ? "PAK_WriteDeltaUsercmd, 200 fwd / 160 side — this ROTATED your angle"
+              : "PAK_WriteDeltaUsercmd — 200 fwd / 160 side")
+        : row(sof ? "" : "skipped", "③ per-axis trim", pair(chain.wire),
+            sof
+              ? "nothing to trim — already under 200 fwd / 160 side"
+              : "Q2's MSG_WriteDeltaUsercmd clamps nothing"),
+      row("", "④ run × 2", pair(chain.cmd),
+        sof ? "ClientThink — server side, after the trim" : "CL_BaseMove — client side, in Q2"),
+      row("out", "⑤ what pmove sees",
+        chain.push.toFixed(1) + " @ " + cvarFmtDeg(chain.keyAngle),
+        chain.atCap
+          ? `wishspeed ${chain.rawPush.toFixed(1)} capped at pm_maxspeed 300`
+          : `wishspeed ${chain.rawPush.toFixed(1)} — under the 300 cap`),
+    ];
+    pipeEl.innerHTML = rows.join("");
+  }
+
   function render() {
     const fwd = +fwdInput.value;
     const side = +sideInput.value;
@@ -917,8 +1035,14 @@ function mountChCvars(section) {
     sideVal.textContent = side;
     speedVal.textContent = speed;
 
-    const chain = cmdChain(fwd, side);
+    const sof = engineInput.checked;
+    engineNote.textContent = sof
+      ? "steps ② and ③ on: diagonal shrink, then the 200/160 trim"
+      : "off — stock Quake II: no diagonal shrink, no trim, so your angle is exactly what you typed";
+
+    const chain = cmdChain(fwd, side, engineOpts());
     const push = chain.push;
+    drawPipeline(chain);
 
     if (push <= 0) {
       pushEl.textContent = keyEl.textContent = deadEl.textContent = "—";
@@ -931,7 +1055,7 @@ function mountChCvars(section) {
     const dead = chainDeadAngle(speed, push);
     const best = chainBestAngle(speed, push, pm_airaccelerate, CVAR_FRAMETIME);
     const aim = aimFor(best, chain.keyAngle);
-    const m = { key: chain.keyAngle, push, speed, dead, best, aim, mode: aimMode };
+    const m = { key: chain.keyAngle, push, speed, dead, best, aim, mode: aimMode, engine: chain.engine };
     aimBestBtn.classList.toggle("primary", aimMode === "best");
     aimStraightBtn.classList.toggle("primary", aimMode === "straight");
 
@@ -951,15 +1075,20 @@ function mountChCvars(section) {
 
     const straightAt = chainAimedStraightSpeed(chain.keyAngle, push, pm_airaccelerate, CVAR_FRAMETIME);
     explainEl.innerHTML = `
-      ${chain.normalized
-        ? `Both keys down, so step ② shrinks <b>${chain.typed.f} / ${chain.typed.s}</b> to
-           <b>${chain.normalized.f} / ${chain.normalized.s}</b> — same direction, length cut to
-           max(f, s) = <b>${Math.max(chain.typed.f, chain.typed.s)}</b>. `
-        : `Only one axis is non-zero, so step ② is skipped entirely. `}
-      ${chain.rotatedByClamp
-        ? `Step ③ then trims it to <b>${chain.wire.f} / ${chain.wire.s}</b>, which
-           <b>rotates your angle</b> — this config is not aiming where you typed. `
-        : `Step ③ trims nothing. `}
+      <b>${sof ? "SOF's client chain" : "Stock Quake II's chain"}.</b>
+      ${sof
+        ? `${chain.normalized
+            ? `Both keys down, so step ② shrinks <b>${chain.typed.f} / ${chain.typed.s}</b> to
+               <b>${chain.normalized.f} / ${chain.normalized.s}</b> — same direction, length cut to
+               max(f, s) = <b>${Math.max(chain.typed.f, chain.typed.s)}</b>. `
+            : `Only one axis is non-zero, so step ② is skipped entirely. `}
+           ${chain.rotatedByClamp
+            ? `Step ③ then trims it to <b>${chain.wire.f} / ${chain.wire.s}</b>, which
+               <b>rotates your angle</b> — this config is not aiming where you typed. `
+            : `Step ③ trims nothing. `}`
+        : `Neither the diagonal shrink nor the 200/160 trim exists here, so
+           <b>${chain.typed.f} / ${chain.typed.s}</b> goes through untouched and your key angle is
+           exactly <b>atan2(${chain.typed.s}, ${chain.typed.f})</b> — nothing in Q2 can rotate it. `}
       Doubled that's <b>${chain.cmd.f} / ${chain.cmd.s}</b>, a push of length
       <b>${chain.rawPush.toFixed(1)}</b>${chain.atCap ? ` — cut down to the <b>300</b> cap` : ` (under the 300 cap, so this config is costing you push strength)`}.
       At ${speed.toFixed(0)} u/s that puts your crosshair at
@@ -1036,6 +1165,7 @@ function mountChCvars(section) {
 
   aimBestBtn.addEventListener("click", () => { aimMode = "best"; render(); });
   aimStraightBtn.addEventListener("click", () => { aimMode = "straight"; render(); });
+  engineInput.addEventListener("change", render);
 
   fwdInput.addEventListener("input", render);
   sideInput.addEventListener("input", render);

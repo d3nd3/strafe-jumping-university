@@ -124,25 +124,57 @@ const CMD_MAX_FORWARD = CMD_FORWARD_CAP * CMD_RUN_MULTIPLIER; // 400
 const CMD_MAX_SIDE = CMD_SIDE_CAP * CMD_RUN_MULTIPLIER; //       320
 const CMD_MAX_UP = CMD_UP_CAP * CMD_RUN_MULTIPLIER; //           400
 
+// ---------------------------------------------------------------------------
+// STOCK QUAKE II, for contrast. Two of the five steps above simply do not exist
+// there, and this matters enough that every demo in the cvar chapter can be
+// switched between the two:
+//
+//   step 2 (the diagonal normalizer)  SoF only. Quake II's CL_FinishMove has no
+//                                     counterpart -- diagonals really are faster
+//                                     in Q2, which is the bug SoF fixed.
+//   step 3 (the 200/160 per-axis trim) SoF only. Q2 ships MSG_WriteDeltaUsercmd,
+//                                     which writes forwardmove/sidemove as plain
+//                                     shorts and clamps nothing. That function is
+//                                     still in the SoF binary with zero callers.
+//   step 4 (the run doubling)         In BOTH, but in different places: Q2 does
+//                                     it client-side at the end of CL_BaseMove
+//                                     ("adjust for speed key / running"), SoF
+//                                     does it server-side in ClientThink after
+//                                     the trim. Same x2 either way.
+//
+// So under Q2 rules your key angle is exactly atan2(cl_sidespeed,
+// cl_forwardspeed) for every config, forever -- nothing can rotate it. Under SoF
+// rules it only stays there until the trim starts biting.
+// ---------------------------------------------------------------------------
+const CMD_ENGINES = ["sof", "q2"];
+
+function cmdEngine(opts) {
+  return opts && opts.engine === "q2" ? "q2" : "sof";
+}
+
 // Run the whole chain for one fully-held key on each axis.
 //
 //   fwdCvar / sideCvar : what you typed in the console
 //   opts.run           : the 0x20 button bit (default true -- cl_run 1)
 //   opts.speedByte     : the 0..255 speed-scale byte (default 255 = healthy)
+//   opts.engine        : "sof" (default) or "q2" -- see CMD_ENGINES above
 //
 // Returns every intermediate value so the UI can show where a number died.
 function cmdChain(fwdCvar, sideCvar, opts) {
   const run = !opts || opts.run !== false;
   const speedByte = opts && opts.speedByte !== undefined ? opts.speedByte : 255;
+  const engine = cmdEngine(opts);
+  const isSof = engine === "sof";
 
-  // 1. CL_BaseMove: cvar -> short, truncated
+  // 1. CL_BaseMove: cvar -> short, truncated. Both engines.
   const typed = { f: Math.trunc(fwdCvar), s: Math.trunc(sideCvar) };
 
-  // 2. CL_FinishMove: diagonal normalizer, both-axes-only, direction-preserving
+  // 2. CL_FinishMove: diagonal normalizer, both-axes-only, direction-preserving.
+  //    SoF only.
   let f = typed.f;
   let s = typed.s;
   let normalized = null;
-  if (f !== 0 && s !== 0) {
+  if (isSof && f !== 0 && s !== 0) {
     const len = Math.hypot(s, f);
     const big = Math.max(Math.abs(f), Math.abs(s));
     s = Math.trunc((s / len) * big);
@@ -150,16 +182,21 @@ function cmdChain(fwdCvar, sideCvar, opts) {
     normalized = { f, s };
   }
 
-  // 3. PAK_WriteDeltaUsercmd: per-axis clamp, written back into cl.cmds[]
-  const wire = {
-    f: Math.max(-CMD_FORWARD_CAP, Math.min(CMD_FORWARD_CAP, f)),
-    s: Math.max(-CMD_SIDE_CAP, Math.min(CMD_SIDE_CAP, s)),
-  };
-  const rotatedByClamp = normalized !== null && (wire.f !== f || wire.s !== s);
+  // 3. PAK_WriteDeltaUsercmd: per-axis clamp, written back into cl.cmds[].
+  //    SoF only -- Q2's MSG_WriteDeltaUsercmd writes the shorts through untouched.
+  const wire = isSof
+    ? {
+        f: Math.max(-CMD_FORWARD_CAP, Math.min(CMD_FORWARD_CAP, f)),
+        s: Math.max(-CMD_SIDE_CAP, Math.min(CMD_SIDE_CAP, s)),
+      }
+    : { f, s };
+  const trimmed = wire.f !== f || wire.s !== s;
+  const rotatedByClamp = normalized !== null && trimmed;
 
-  // 4. ClientThink: run doubling, then the speed-scale byte, one truncation
+  // 4. Run doubling, then the speed-scale byte, one truncation. Both engines
+  //    (ClientThink in SoF, CL_BaseMove in Q2); the speed byte is SoF's only.
   const mult = run ? CMD_RUN_MULTIPLIER : 1;
-  const scale = speedByte * (1 / 255);
+  const scale = isSof ? speedByte * (1 / 255) : 1;
   const cmd = {
     f: Math.trunc(wire.f * mult * scale),
     s: Math.trunc(wire.s * mult * scale),
@@ -171,9 +208,11 @@ function cmdChain(fwdCvar, sideCvar, opts) {
   const keyAngle = Math.atan2(cmd.s, cmd.f); // radians right of your crosshair
 
   return {
+    engine,
     typed,
-    normalized, // null when only one axis is held (step 2 is skipped)
+    normalized, // null when step 2 didn't run (one axis only, or Q2)
     wire,
+    trimmed, // step 3 actually cut something
     cmd,
     rawPush, // length of the push before pm_maxspeed
     push, // wishspeed actually handed to PM_Accelerate
@@ -187,9 +226,12 @@ function cmdChain(fwdCvar, sideCvar, opts) {
 // case (it needs both axes non-zero), so the raw cvar goes straight into the
 // clamp. This is the constraint that pins cl_forwardspeed at 150 or above:
 // anything less and you can no longer reach 300 running straight ahead.
+// Under Q2 rules there is no clamp, so only the 300 cap applies.
 function chainSingleAxis(cvar, axis, opts) {
   const run = !opts || opts.run !== false;
-  const cap = axis === "side" ? CMD_SIDE_CAP : CMD_FORWARD_CAP;
+  const cap = cmdEngine(opts) === "q2"
+    ? Infinity
+    : axis === "side" ? CMD_SIDE_CAP : CMD_FORWARD_CAP;
   const mult = run ? CMD_RUN_MULTIPLIER : 1;
   return Math.min(Math.min(Math.trunc(Math.abs(cvar)), cap) * mult, pm_maxspeed);
 }

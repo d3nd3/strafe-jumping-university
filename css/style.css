@@ -274,6 +274,54 @@ pre.code {
   margin-bottom: -6px;
 }
 
+.checkrow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  cursor: pointer;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.checkrow:hover { border-color: var(--accent-dim); }
+.checkrow input { margin: 2px 0 0; accent-color: var(--accent); flex: 0 0 auto; }
+.checkrow b { font-family: var(--mono); font-size: 12.5px; color: var(--text); display: block; }
+.checkrow em { font-style: normal; font-size: 11.5px; color: var(--text-dim); display: block; margin-top: 2px; }
+
+/* the live "your numbers, step by step" strip under the dial */
+.pipe-head {
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 14px 0 6px;
+}
+.pipeline { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.pipe-row {
+  display: grid;
+  grid-template-columns: 132px 104px 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 11px;
+  font-size: 12px;
+}
+.pipe-row + .pipe-row { border-top: 1px solid rgba(255,255,255,0.05); }
+.pipe-row .s { color: var(--text-dim); }
+.pipe-row .v { color: var(--text); }
+.pipe-row .n { color: var(--text-dim); font-size: 11px; }
+.pipe-row.hot .v { color: var(--amber); }
+.pipe-row.out { background: rgba(125,255,176,0.05); }
+.pipe-row.out .v { color: var(--accent); }
+/* a skipped step still passes its numbers on unchanged, so dim the row rather
+   than striking the value out -- those digits are real */
+.pipe-row.skipped { opacity: .5; }
+.pipe-row.skipped .v { color: var(--text-dim); }
+@media (max-width: 520px) {
+  .pipe-row { grid-template-columns: 1fr auto; }
+  .pipe-row .n { grid-column: 1 / -1; }
+}
+
 /* what every arrow on the dial actually means */
 .glossary { margin: 0; }
 .glossary dt {
